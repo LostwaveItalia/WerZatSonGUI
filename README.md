@@ -102,6 +102,51 @@ When your computer restarts and installation has finished, you can use the deskt
 
 Visual Studio Build Tools and Rust are both intentionally **not** installed silently in the background. Visual Studio Build Tools in particular is a large, slow install, and previous versions of this installer couldn't reliably detect an existing install, so it ended up reinstalling (and re-downloading hundreds of components) on every single run even when it was already present. Installing it (and Rust) now opens the correct official installer for your version of Windows in your browser and simply waits for you to confirm once you're done, which is slower to click through but far more predictable and far less likely to silently fail or balloon in size.
 
+#### Troubleshooting: How to Fix the "missing dependencies" / "Crash prevented!" Startup Error
+
+!["missing dependencies" / "Crash prevented!" Startup Error](assets/images/missing-dependencies-error.png)
+
+If you used the WerZatSonGUI installer and are getting a crash error when trying to start the program (like the one shown above) it usually means the Visual Studio Build Tools weren't installed correctly.
+This is a known issue and a very easy fix!
+
+##### Step 1: Save Your Error Message
+
+Keep the error window open, or open your `crash_logs.txt` file. Make sure you have everything the error window said written down somewhere. You will need to look at a specific command from this error message in *Step 5.*
+
+##### Step 2: Install Visual Studio Build Tools
+
+> **Important Note:** If your computer is set to a language other than English, the buttons and options in this installer will be in your local language! Just look for the options that *translate* to the English terms below.
+
+1. Download the official installer here: [Visual Studio Build Tools](https://aka.ms/vs/stable/vs_BuildTools.exe)
+2. Open the installer. If you see a list of different programs, scroll until you find **Visual Studio Build Tools 2026** (or whatever the latest version is).
+3. Click the **Modify** (or **Edit**) button next to it.
+4. A window with several options will pop up. Look in the top left corner and check the box that says **Desktop development with C++** or something like that. *(Note: You do not need to check any other options).*
+5. Click **"Install"** in the bottom right corner and wait for it to finish.
+
+##### Step 3: Restart Your Computer
+Once the installation is completely finished, restart your PC to make sure the changes are applied.
+
+##### Step 4: Open Command Prompt as Administrator
+1. Click on your Windows search bar at the bottom of your screen and type `cmd`.
+2. Right-click on **Command Prompt** and select **Run as administrator**.
+
+##### Step 5: Run the Fix Command
+Now, look back at the error message from Step 1. You will see a line of text that looks something like this: 
+`C:\Program Files\Python313\python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+
+This command can easily be ran in two parts:
+
+1. Find the folder path *before* the `.exe` file in your error message. Put that path inside quotation marks, type `cd` and a space in front of it, and press **Enter**. 
+   *Example:* 
+   `cd "C:\Program Files\Python313\"`
+
+2. Now, type in the remaining part of the command (your `.exe` file and everything after it) and press **Enter**. 
+   *Example:* 
+   `python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+
+After this, let it load and finish doing its thing.
+Once it's done, you can close the window, and run WerZatSonGUI: it will now work.
+
 ### Recommended (if you already have WerZatSong or an older WerZatSonGUI installed): upgrade_to_GUI.zip
 
 If you'd rather not run the installer at all (for example, to avoid the SmartScreen warning described in [*SmartScreen / Antivirus Warnings*](#smartscreen--antivirus-warnings) below), and you already have either the original command-line **WerZatSong** or an older copy of **WerZatSonGUI** installed and working, you don't need to reinstall everything from scratch. In the releases, you will find `upgrade_to_GUI.zip`. Extract that archive in an empty folder and run `upgrade_to_GUI.bat`: it will handle both cases automatically since almost everything it needs (Node.js, Python, Rust, the C++ Build Tools, FFmpeg) is already on your system.

@@ -102,6 +102,51 @@ Quando il computer si sarà riavviato e l'installazione sarà terminata, potrai 
 
 I C++ Build Tools di Visual Studio e Rust non vengono installati silenziosamente in background di proposito. I C++ Build Tools di Visual Studio, in particolare, sono un'installazione grande e lenta, e le versioni precedenti di questo programma di installazione non riuscivano a rilevare in modo affidabile un'installazione già esistente, finendo per reinstallarli (e riscaricare centinaia di componenti) a ogni singola esecuzione anche quando erano già presenti. Installarli (insieme a Rust) ora apre il programma di installazione ufficiale corretto per la tua versione di Windows nel browser e si limita ad aspettare la tua conferma una volta finito, il che è più lento da seguire manualmente ma molto più prevedibile e molto meno soggetto a fallire silenziosamente o a gonfiarsi di dimensioni.
 
+#### Risoluzione dei problemi: Come risolvere l'errore di avvio "missing dependencies" / "Crash prevented!"
+
+!["missing dependencies" / "Crash prevented!" Errore di avvio](assets/images/missing-dependencies-error.png)
+
+Se hai utilizzato l'installer di WerZatSonGUI e hai ricevuto un errore di crash quando hai provato ad avviare il programma (come quello mostrato qui sopra), di solito significa che i Visual Studio Build Tools non sono stati installati correttamente.
+È un problema noto e molto facile da risolvere!
+
+##### Passaggio 1: Salva il tuo messaggio di errore
+
+Tieni aperta la finestra dell'errore, oppure apri il tuo file `crash_logs.txt`. Assicurati di aver annotato da qualche parte tutto ciò che era scritto nella finestra dell'errore. Avrai bisogno di guardare un comando specifico da questo messaggio di errore nel *Passaggio 5.*
+
+##### Passaggio 2: Installa i Visual Studio Build Tools
+
+> **Nota importante:** Se il tuo computer è impostato su una lingua diversa dall'italiano, i pulsanti e le opzioni in questo installer saranno nella tua lingua locale! Cerca semplicemente le opzioni che si *traducono* nei termini italiani qui sotto.
+
+1. Scarica l'installer ufficiale qui: [Visual Studio Build Tools](https://aka.ms/vs/stable/vs_BuildTools.exe)
+2. Apri l'installer. Se vedi un elenco di programmi diversi, scorri finché non trovi **Visual Studio Build Tools 2026** (o qualunque sia l'ultima versione).
+3. Fai clic sul pulsante **Modifica** accanto ad esso.
+4. Si aprirà una finestra con diverse opzioni. Guarda nell'angolo in alto a sinistra e spunta la casella che dice **Sviluppo di applicazioni desktop con C++** o qualcosa del genere. *(Nota: Non è necessario spuntare nessun'altra opzione).*
+5. Clicca su **"Installa"** nell'angolo in basso a destra e aspetta che finisca.
+
+##### Passaggio 3: Riavvia il computer
+Una volta terminata completamente l'installazione, riavvia il PC per assicurarti che le modifiche vengano applicate correttamente.
+
+##### Passaggio 4: Apri il Prompt dei comandi come Amministratore
+1. Clicca sulla barra di ricerca di Windows nella parte inferiore dello schermo e digita `cmd`.
+2. Fai clic col tasto destro su **Prompt dei comandi** e seleziona **Esegui come amministratore**.
+
+##### Passaggio 5: Esegui il comando di correzione
+Ora, riguarda il messaggio di errore del Passaggio 1. Vedrai una riga di testo che assomiglia a questa: 
+`C:\Program Files\Python313\python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+
+Questo comando può essere facilmente eseguito in due parti:
+
+1. Trova il percorso della cartella *prima* del file `.exe` nel tuo messaggio di errore. Metti quel percorso tra virgolette, digita `cd` (seguito da uno spazio davanti ad esso), e premi **Invio**. 
+   *Esempio:* 
+   `cd "C:\Program Files\Python313\"`
+
+2. Ora, digita la parte rimanente del comando (il tuo file `.exe` e tutto ciò che lo segue) e premi **Invio**. 
+   *Esempio:* 
+   `python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+
+Fatto ciò, aspetta che si carichi e che finisca il suo lavoro.
+Una volta terminato, puoi chiudere la finestra ed eseguire WerZatSonGUI: ora funzionerà.
+
 ### Consigliato (se hai già WerZatSong o una vecchia versione di WerZatSonGUI installata): upgrade_to_GUI.zip
 
 Se preferisci non usare affatto il programma di installazione (per esempio per evitare l'avviso di SmartScreen descritto in [*Avvisi di SmartScreen / Antivirus*](#avvisi-di-smartscreen--antivirus) più sotto), e hai già installato e funzionante o l'originale **WerZatSong** a riga di comando o una vecchia copia di **WerZatSonGUI**, non serve reinstallare tutto da zero: nelle release troverai `upgrade_to_GUI.zip`. Estrai quell'archivio in una cartella vuota e fai partire `upgrade_to_GUI.bat`: gestisce automaticamente entrambi i casi, dato che quasi tutto il necessario (Node.js, Python, Rust, i C++ Build Tools, FFmpeg) è già presente sul tuo sistema.
