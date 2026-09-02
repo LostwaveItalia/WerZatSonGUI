@@ -1,0 +1,7 @@
+# Folders
+__pycache__/
+logs/
+node_modules/
+
+# Files
+package-lock.json
