@@ -1,0 +1,11 @@
+docopt
+joblib
+numpy
+psutil
+scipy
+yt-dlp
+audioop-lts
+shazamio
+sv_ttk
+darkdetect
+pywinstyles
