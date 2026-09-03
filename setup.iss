@@ -1,5 +1,6 @@
 [Setup]
 ; Basic Installer Configuration
+WizardStyle=modern dynamic
 AppName=WerZatSonGUI
 AppVersion=1.3.1
 AppPublisher=LostwaveItalia
