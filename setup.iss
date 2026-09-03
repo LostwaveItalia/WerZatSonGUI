@@ -19,6 +19,8 @@ OutputBaseFilename=WerZatSonGUI_Installer
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern dynamic
+UsePreviousAppDir=no
+UsePreviousGroup=no
 DisableWelcomePage=no
 SetupIconFile=assets\logo.ico
 WizardSmallImageFile=assets\logo.png
@@ -88,6 +90,7 @@ Type: filesandordirs; Name: "{app}"
 [Code]
 var
   InstallModePage: TInputOptionWizardPage;
+  LastSelectedMode: Integer; 
 
 // If Setup itself ran in Italian, also switch the freshly-installed config.json's
 // default language to Italiano, so WerZatSonGUI opens in the same language you just
@@ -132,18 +135,24 @@ begin
   
   // Default to the first option (All users)
   InstallModePage.SelectedValueIndex := 0;
+  LastSelectedMode := -1; // Force an update the first time the page loads
 end;
 
-function NextButtonClick(CurPageID: Integer): Boolean;
+procedure CurPageChanged(CurPageID: Integer);
 begin
-  Result := True;
-  // When the user clicks "Next" on the custom mode page...
-  if CurPageID = InstallModePage.ID then
+  // Updates the path when arriving at the Directory page
+  // Only if the mode was changed (or it's the first time)
+  // This should ensure user-typed paths aren't wiped if they click Back and Next
+  if CurPageID = wpSelectDir then
   begin
-    // Update the invisible directory field before they get to the Select Directory page
-    if InstallModePage.SelectedValueIndex = 0 then
-      WizardForm.DirEdit.Text := ExpandConstant('{sd}\WerZatSonGUI')
-    else
-      WizardForm.DirEdit.Text := ExpandConstant('{userprofile}\WerZatSonGUI'); // Dynamically points to C:\Users\YourUser\WerZatSonGUI
+    if InstallModePage.SelectedValueIndex <> LastSelectedMode then
+    begin
+      if InstallModePage.SelectedValueIndex = 0 then
+        WizardForm.DirEdit.Text := ExpandConstant('{sd}\WerZatSonGUI')
+      else
+        WizardForm.DirEdit.Text := GetEnv('USERPROFILE') + '\WerZatSonGUI';
+        
+      LastSelectedMode := InstallModePage.SelectedValueIndex;
+    end;
   end;
 end;
