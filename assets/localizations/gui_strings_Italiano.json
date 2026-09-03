@@ -155,7 +155,7 @@
 	"log_convert_error": "[ATTENZIONE]: Impossibile convertire '{file}' in MP3: {error}",
 	"log_convert_done": "[SUCCESSO]: Convertiti {count} file in MP3.",
 	"no_explanation": "Nessuna spiegazione disponibile per quest'impostazione.",
-	"credits_line1": "WerZatSonGUI v1.3.0",
+	"credits_line1": "WerZatSonGUI v1.3.1",
 	"credits_line1_rest": " di some random account con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.",
 	"credits_line2": "Script per provare in blocco canzoni su WerZatSong",
 	"credits_line2_rest": " di some random account con logica per la generazione di file a velocità alternative di Mystic65.",

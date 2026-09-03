@@ -2,7 +2,7 @@
 # WerZatSonGUI
 
 ![Piattaforma: Windows x64](https://img.shields.io/badge/Piattaforma-Windows%20x64-blue)
-![Versione: 1.3.0](https://img.shields.io/badge/Versione-1.3.0-orange)
+![Versione: 1.3.1](https://img.shields.io/badge/Versione-1.3.1-orange)
 
 **WerZatSonGUI** è un'app desktop per Windows x64 che aggiunge un'interfaccia grafica completa a [**WerZatSong**](https://github.com/Nel80s/WerZatSong), il programma originario a riga di comando per la ricerca di canzoni. Se hai già usato WerZatSong, quest'app funziona essenzialmente allo stesso modo: semplicemente non devi più aprire manualmente un terminale e digitare comandi per usarlo. Leggi [*Funzionalità della GUI*](#funzionalit%C3%A0-della-gui) per maggiori informazioni.
 
@@ -134,15 +134,7 @@ Una volta terminata completamente l'installazione, riavvia il PC per assicurarti
 Ora, riguarda il messaggio di errore del Passaggio 1. Vedrai una riga di testo che assomiglia a questa: 
 `C:\Program Files\Python313\python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
 
-Questo comando può essere facilmente eseguito in due parti:
-
-1. Trova il percorso della cartella *prima* del file `.exe` nel tuo messaggio di errore. Metti quel percorso tra virgolette, digita `cd` (seguito da uno spazio davanti ad esso), e premi **Invio**. 
-   *Esempio:* 
-   `cd "C:\Program Files\Python313\"`
-
-2. Ora, digita la parte rimanente del comando (il tuo file `.exe` e tutto ciò che lo segue) e premi **Invio**. 
-   *Esempio:* 
-   `python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+Basta che copi e incolli, uguale uguale, quella riga, `"C:\Program Files\Python313\python.exe" -m pip install -r C:\WerZatSonGUI\requirements.txt`, nella tua finestra di cmd, poi premi **Invio**.
 
 Fatto ciò, aspetta che si carichi e che finisca il suo lavoro.
 Una volta terminato, puoi chiudere la finestra ed eseguire WerZatSonGUI: ora funzionerà.
@@ -416,6 +408,6 @@ Se preferisci evitare del tutto il programma di installazione segnalato, e hai g
 
 ## Crediti
 
-- **WerZatSonGUI v1.3.0** di some random account con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.
+- **WerZatSonGUI v1.3.1** di some random account con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.
 - **Script per provare in blocco canzoni su WerZatSong** di some random account con logica per la generazione di file a velocità alternative di Mystic65.
 - **WerZatSong** di Nel con contributi da Numerophobe, AzureBlast e Mystic65.

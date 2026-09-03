@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 1.3.0](https://img.shields.io/badge/Version-1.3.0-orange)
+![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-orange)
 
 **WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*Features of the GUI*](#features-of-the-gui) for more info.
 
@@ -132,17 +132,9 @@ Once the installation is completely finished, restart your PC to make sure the c
 
 ##### Step 5: Run the Fix Command
 Now, look back at the error message from Step 1. You will see a line of text that looks something like this: 
-`C:\Program Files\Python313\python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+`"C:\Program Files\Python313\python.exe" -m pip install -r C:\WerZatSonGUI\requirements.txt`
 
-This command can easily be ran in two parts:
-
-1. Find the folder path *before* the `.exe` file in your error message. Put that path inside quotation marks, type `cd` and a space in front of it, and press **Enter**. 
-   *Example:* 
-   `cd "C:\Program Files\Python313\"`
-
-2. Now, type in the remaining part of the command (your `.exe` file and everything after it) and press **Enter**. 
-   *Example:* 
-   `python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+Just copy and paste that line, `"C:\Program Files\Python313\python.exe" -m pip install -r C:\WerZatSonGUI\requirements.txt`, into your cmd window, then press **Enter**.
 
 After this, let it load and finish doing its thing.
 Once it's done, you can close the window, and run WerZatSonGUI: it will now work.
@@ -416,6 +408,6 @@ If you'd rather sidestep the flagged installer entirely, and you already have a 
 
 ## Credits
 
-- **WerZatSonGUI v1.3.0** by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.
+- **WerZatSonGUI v1.3.1** by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.

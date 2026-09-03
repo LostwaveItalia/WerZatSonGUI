@@ -155,7 +155,7 @@
 	"log_convert_error": "[WARNING]: Failed to convert '{file}' to MP3: {error}",
 	"log_convert_done": "[SUCCESS]: Converted {count} file(s) to MP3.",
 	"no_explanation": "No explanation available for this setting.",
-	"credits_line1": "WerZatSonGUI v1.3.0",
+	"credits_line1": "WerZatSonGUI v1.3.1",
 	"credits_line1_rest": " by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.",
 	"credits_line2": "WerZatSong batch script",
 	"credits_line2_rest": " by some random account, with speed/tempo-based file generation logic by Mystic65.",

@@ -65,9 +65,10 @@ except Exception as e:
     f"Crash prevented!\n\n"
     f"Windows is running this file using:\n{sys.executable}\n"
     f"The installation listed above could have missing dependencies.\n"
-    f"You may have multiple Python installations.\n"
-    f"Make sure to install all the requirements, by running the following command in cmd or PowerShell (which you can copy from the crash_logs.txt file):\n\n"
-    f"{python_executable} -m pip install -r {pyw_folder}\\requirements.txt\n\n"
+    f"You may have multiple Python installations, or Visual Studio Build Tools could be missing.\n"
+    f"Make sure to properly install the Visual Studio Build Tools with the \"Desktop Development with C++\" option checked, restart your PC, then install the remaining requirements, by running the following command in cmd or PowerShell (which you can copy from the crash_logs.txt file):\n\n"
+    f"\"{python_executable}\" -m pip install -r {pyw_folder}\\requirements.txt\n\n"
+    f"Guide on how to fix the error: https://github.com/LostwaveItalia/WerZatSonGUI/tree/main#troubleshooting-how-to-fix-the-missing-dependencies--crash-prevented-startup-error\n\n"
     f"Error details:\n{error_details}"
     )
 
@@ -726,20 +727,47 @@ def apply_theme_to_gui(root, theme_mode="System"):
     elif theme_mode == "Dark":
         target_theme = "dark"
     else:
+        # Prevent crash if darkdetect returns None on Windows Server
         target_theme = darkdetect.theme()
+        if target_theme is None:
+            target_theme = "light" # Default fallback
+            
+    # Ensure lowercase for sv_ttk compatibility
+    target_theme = target_theme.lower()
 
     sv_ttk.set_theme(target_theme)
     version = sys.getwindowsversion()
+    
+    # Check if the OS is a Server edition (product_type != 1 means Server/Domain Controller)
+    is_server = getattr(version, 'product_type', 1) != 1
 
-    if version.major == 10 and version.build >= 22000:
-        # Sets the title bar color to the background color on Windows 11 for better appearance
-        pywinstyles.change_header_color(root, "#1c1c1c" if target_theme == "dark" else "#fafafa")
-    elif version.major == 10:
-        pywinstyles.apply_style(root, "dark" if target_theme == "dark" else "normal")
+    # Wrap in try/except so DWM failures don't crash the entire GUI
+    try:
+        if version.major == 10 and version.build >= 22000:
+            # Sets the title bar color to the background color on Windows 11
+            pywinstyles.change_header_color(root, "#1c1c1c" if target_theme == "dark" else "#fafafa")
+            
+        elif version.major == 10:
+            if is_server:
+                # pywinstyles can easily fail on Server OS. ctypes used to force it natively.
+                root.update_idletasks() # Ensure the window is drawn to get a valid HWND
+                hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+                
+                # Attribute 20 is DWMWA_USE_IMMERSIVE_DARK_MODE for build >= 18985 (Server 2022 is 20348)
+                # Attribute 19 is for older builds (like Server 2019 / build 17763)
+                attribute = 20 if version.build >= 18985 else 19
+                value = ctypes.c_int(1 if target_theme == "dark" else 0)
+                
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
+            else:
+                pywinstyles.apply_style(root, "dark" if target_theme == "dark" else "normal")
 
-        # Updates the title bar's color on Windows 10 (it doesn't update instantly like on Windows 11)
-        root.wm_attributes("-alpha", 0.99)
-        root.wm_attributes("-alpha", 1)
+            # Updates the title bar's color on Windows 10 & Server 2022 (forces a DWM refresh)
+            root.wm_attributes("-alpha", 0.99)
+            root.wm_attributes("-alpha", 1)
+            
+    except Exception as e:
+        print(f"[WARNING]: Could not apply custom title bar styles: {e}")
 
 
 def force_clean_directory(dir_path, recreate=False):

@@ -1,12 +1,12 @@
 [Setup]
 ; Basic Installer Configuration
 AppName=WerZatSonGUI
-AppVersion=1.3.0
+AppVersion=1.3.1
 AppPublisher=LostwaveItalia
-AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI-dev
-AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI-dev/issues
-AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI-dev/releases
-VersionInfoVersion=1.3.0.0
+AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI
+AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI/issues
+AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI/releases
+VersionInfoVersion=1.3.1.0
 VersionInfoCompany=WerZatSonGUI
 VersionInfoDescription=WerZatSonGUI Installer
 VersionInfoCopyright=WerZatSonGUI
@@ -36,6 +36,15 @@ english.InstallingDepsStatus=Installing dependencies (Node.js, Python, FFmpeg, R
 italian.InstallingDepsStatus=Installazione delle dipendenze (Node.js, Python, FFmpeg, Rust, strumenti per C++)... potrebbe venirti chiesto di confermare un paio di installazioni
 english.LaunchAppDesc=Launch Application Now
 italian.LaunchAppDesc=Avvia l'applicazione ora
+
+english.InstallModeTitle=Installation Mode
+italian.InstallModeTitle=Modalità di installazione
+english.InstallModeDesc=Please choose how you want to install WerZatSonGUI.
+italian.InstallModeDesc=Scegli come desideri installare WerZatSonGUI.
+english.InstallModeAll=Install for all users
+italian.InstallModeAll=Installa per tutti gli utenti
+english.InstallModeUser=Install just for me
+italian.InstallModeUser=Installa solo per me
 
 [Files]
 ; Helper files for installing dependencies
@@ -77,6 +86,9 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Com
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+var
+  InstallModePage: TInputOptionWizardPage;
+
 // If Setup itself ran in Italian, also switch the freshly-installed config.json's
 // default language to Italiano, so WerZatSonGUI opens in the same language you just
 // installed in instead of always landing on English first.
@@ -105,5 +117,33 @@ begin
       // 5. Save the updated file
       SaveStringToFile(ConfigPath, ConfigContentAnsi, False);
     end;
+  end;
+end;
+
+// Install logic
+procedure InitializeWizard;
+begin
+  // Create a custom page right after the Welcome page
+  InstallModePage := CreateInputOptionPage(wpWelcome,
+    CustomMessage('InstallModeTitle'), CustomMessage('InstallModeDesc'),
+    '', True, False);
+  InstallModePage.Add(CustomMessage('InstallModeAll'));
+  InstallModePage.Add(CustomMessage('InstallModeUser'));
+  
+  // Default to the first option (All users)
+  InstallModePage.SelectedValueIndex := 0;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  // When the user clicks "Next" on the custom mode page...
+  if CurPageID = InstallModePage.ID then
+  begin
+    // Update the invisible directory field before they get to the Select Directory page
+    if InstallModePage.SelectedValueIndex = 0 then
+      WizardForm.DirEdit.Text := ExpandConstant('{sd}\WerZatSonGUI')
+    else
+      WizardForm.DirEdit.Text := ExpandConstant('{userprofile}\WerZatSonGUI'); // Dynamically points to C:\Users\YourUser\WerZatSonGUI
   end;
 end;

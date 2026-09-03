@@ -3,9 +3,9 @@ joblib
 numpy
 psutil
 scipy
-yt-dlp
-audioop-lts
-shazamio
 sv_ttk
 darkdetect
 pywinstyles
+yt-dlp
+audioop-lts; python_version >= '3.13'
+shazamio
