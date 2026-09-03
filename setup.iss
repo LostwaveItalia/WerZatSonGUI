@@ -1,6 +1,5 @@
 [Setup]
 ; Basic Installer Configuration
-WizardStyle=modern dynamic
 AppName=WerZatSonGUI
 AppVersion=1.3.1
 AppPublisher=LostwaveItalia
@@ -19,7 +18,7 @@ OutputDir=output
 OutputBaseFilename=WerZatSonGUI_Installer
 Compression=lzma
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic
 DisableWelcomePage=no
 SetupIconFile=assets\logo.ico
 WizardSmallImageFile=assets\logo.png
