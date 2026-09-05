@@ -39,7 +39,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 ## 🚀 Quick Setup Guide
 
-### If you *already have* WerZatSong or an older WerZatSonGUI version:
+### 1️⃣ If you *already have* WerZatSong or an older WerZatSonGUI version:
 
 1. **Download** and **extract in an empty folder** `upgrade_to_GUI.zip`.
 2. **Run** `upgrade_to_GUI.bat` and follow the instructions.
@@ -51,7 +51,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 6. **Select** your preferred search modes.
 7. Click on **Start WerZatSong**.
 
-### Otherwise, if you are a *new user:*
+### 2️⃣ Otherwise, if you are a *new user:*
 1. **Download** and run `WerZatSonGUI_Installer.exe`.
 
 2. **Launch** the installer and follow the instructions; the wizard will make you install **Visual Studio Build Tools** and **Rust,** and take care of other dependencies automatically.
