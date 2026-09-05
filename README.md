@@ -3,7 +3,7 @@
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
 ![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-orange)
 
-**WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*Features*](#features) for more info.
+**WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*🌟 Features*](#-features) for more info.
 
 This document explains how to install WerZatSonGUI, set it up for the first time, and use every part of its interface.
 > **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](README_ITA.md).
@@ -13,22 +13,31 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 ## Table of Contents
 
-- [Quick Start Guide](#quick-start-guide)
-- [Features](#features)
+**General Info:**
+- [🚀 Quick Setup Guide](#-quick-setup-guide)
+- [🌟 Features](#-features)
+
+**Guides (Setup):**
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [First-Time Setup](#first-time-setup)
+- [SmartScreen / Antivirus Warnings](#smartscreen--antivirus-warnings)
+
+**Guides (Using the GUI):**
 - [Using WerZatSonGUI](#using-werzatsongui)
 - [Search Modes Explained](#search-modes-explained)
 - [Running a Scan: Quick vs. Long Mode](#running-a-scan-quick-vs-long-mode)
 - [Processed Files & PROCESSED.txt](#processed-files--processedtxt)
 - [Where to Find Results](#where-to-find-results)
 - [Log Format](#log-format)
+
+**How to Contribute to the Project:**
 - [Adding a Language / Translations](#adding-a-language--translations)
-- [SmartScreen / Antivirus Warnings](#smartscreen--antivirus-warnings)
+
+**Credits:**
 - [Credits](#credits)
 
-## Quick Start Guide
+## 🚀 Quick Setup Guide
 
 ### If you *already have* WerZatSong or an older WerZatSonGUI version:
 
@@ -51,7 +60,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 3. (If your PC restarts) **Re-launch** the installer to finish installing dependencies.
 
-4. **Double click** the shortcut created on the desktop, or **run** `WerZatSonGUI.pyw` in the installation folder.
+4. **Double click** the shortcut created on your Desktop, or **run** `WerZatSonGUI.pyw` in the installation folder.
 
 > If you cannot double click on it directly, open the `WerZatSonGUI.pyw` file with `Python`, `pythonw.exe` or `pyw.exe`-
 
@@ -72,7 +81,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 8. **Select** your preferred search modes.
 9. Click on **Start WerZatSong**.
 
-## Features
+## 🌟 Features
 - Every [**WerZatSong**](https://github.com/Nel80s/WerZatSong) command is supported: all 4 search modes (**MusicBrainz (AcoustID), AudioTag, Shazam** and **Audfprint**) are here, and any number of them can be combined in a single scan.
 - Support for entire **Song Databases** thanks to a **batch-scanning engine,** which lets you add as many audio files as you want to the program: it will automatically scan at most 20-30 at a time, as efficiently as possible (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below). Links to the community-ran [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy) and [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) Song Databases are included in the program under the **Add Audio Files...** section.
 - A built-in script by **Mystic65**, which can automatically generate and search dozens of **tempo/pitch-shifted variations** of each file, to help catch songs that were sped up, slowed down, or pitched differently (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below).
@@ -257,8 +266,8 @@ The very first time you launch WerZatSonGUI, it notices that no `.env` file exis
 
 Your Discord webhook is where WerZatSonGUI sends you a notification (with details, and for some search modes a results file) every time a scan turns up a likely match.
 
-1. Open Discord and create your own server, if you don't already have one to use for this
-2. In any text channel (e.g. **#general**), click the gear icon next to it to open **Edit Channel**
+1. Open Discord and create your own server (*if* you don't already have one to use for this)
+2. Go to any text channel (e.g. **#general**). Click the gear icon (⚙️) next to its name to open the **Edit Channel** menu
 3. Go to **Integrations → Webhooks**
 4. Click **Create Webhook**, then open it and select **Copy Webhook URL**
 5. Paste this URL when WerZatSonGUI asks for it during setup (or afterwards, in the **API Keys & Webhook (.env)** section of the main interface)
@@ -267,18 +276,18 @@ You can optionally give this webhook a custom display name and avatar image dire
 
 ### How to Get an AudioTag API Key
 
-This key is required if you want to use the **AudioTag** search mode.
+This key is required to use the **AudioTag** search mode.
 
-1. Go to the [AudioTag](https://audiotag.info) website and create a new account (or log in, if you already have one)
+1. Go to the [AudioTag](https://audiotag.info) website and *create a new account* (or *log in,* if you already have one)
 2. Go to your [**User Section**](https://user.audiotag.info) and open the **API keys** tab
 3. Click **Create new API key**, then copy it
 4. Paste this key when WerZatSonGUI asks for it during setup (or afterwards, in the **API Keys & Webhook (.env)** section of the main interface)
 
 ### How to Get an AcoustID (MusicBrainz) API Key
 
-This is the key that powers WerZatSonGUI's **MusicBrainz (AcoustID)** search mode: in the interface it's simply labeled **"AcoustID API Key"**.
+This key is required to use the **MusicBrainz (AcoustID)** search mode.
 
-1. Go to the [AcoustID](https://acoustid.org) website and create a new account (or log in, if you already have one)
+1. Go to the [AcoustID](https://acoustid.org) website and *create a new account* (or *log in,* if you already have one)
 2. Go to [**My Applications**](https://acoustid.org/my-applications) and click **Register a new application**
 3. Fill in the fields with basic info (it can be random) and click **Register**
 4. Copy the application's **API key** that appears
@@ -291,6 +300,19 @@ If you plan to use the **Audfprint** search mode, you can download the community
 ![Database](assets/images/database.png)
 
 You can later restrict a scan to just one of these subfolders using **"Use only fingerprints from this subdirectory"** in **Advanced Settings**.
+
+## SmartScreen / Antivirus Warnings
+
+Because `WerZatSonGUI_Installer.exe`, `setup_deps.ps1` and `WerZatSonGUI.pyw` aren't signed with a paid code-signing certificate (which would cost me an amount I'm not able to afford), Windows SmartScreen and some antivirus engines may flag them as coming from an "Unknown publisher" or even quarantine them outright. This is a trust/reputation heuristic based on how new and how widely-distributed a file is, **not** a sign that anything is actually malicious. It's a well-known side effect of independently-distributed Windows software in general, and code-signing certificates aren't something a free/open-source hobby project can typically obtain, so this warning is expected to keep appearing regardless of any change made to the scripts themselves.
+
+If you see a **"Windows protected your PC"** dialog after downloading `WerZatSonGUI_Installer.exe`:
+
+1. Click **More info**
+2. Click the **Run anyway** button that appears
+
+If your antivirus quarantines or deletes `setup.iss`, `setup_deps.ps1`, `upgrade_to_GUI.bat` or `WerZatSonGUI.pyw` instead of just warning about them, restore the file from quarantine (or re-download/re-extract it) and add an exclusion for the WerZatSonGUI folder if your antivirus lets you.
+
+If you'd rather sidestep the flagged installer entirely, and you already have a working WerZatSong or WerZatSonGUI install, see [*Recommended (if you already have WerZatSong or an older WerZatSonGUI installed): upgrade_to_GUI.zip*](#recommended-(if-you-already-have-WerZatSong-or-an-older-WerZatSonGUI-installed):-upgrade_to_GUI.zip) above. `upgrade_to_GUI.bat` reuses your existing Node.js/Python/Rust/C++ Build Tools/FFmpeg install and never needs to touch WinGet or the guided Visual Studio/Rust installers at all.
 
 ## Using WerZatSonGUI
 
@@ -417,19 +439,6 @@ The same legend and formatting is used both in the `.txt` log file and in the re
 ## Adding a Language / Translations
 
 WerZatSonGUI currently ships with **English** and **Italian**, simply because those are the languages that can currently be written and double-checked properly, not a hard limit on what it'll ever support. If you'd like to translate it into another language, see [**TRANSLATION_GUIDE.md**](TRANSLATION_GUIDE.md) for a full walkthrough of every file involved, then get in touch so your translation can be added to the repo officially and everyone can use it.
-
-## SmartScreen / Antivirus Warnings
-
-Because `WerZatSonGUI_Installer.exe`, `setup_deps.ps1` and `WerZatSonGUI.pyw` aren't signed with a paid code-signing certificate (which would cost me an amount I'm not able to afford), Windows SmartScreen and some antivirus engines may flag them as coming from an "Unknown publisher" or even quarantine them outright. This is a trust/reputation heuristic based on how new and how widely-distributed a file is, **not** a sign that anything is actually malicious. It's a well-known side effect of independently-distributed Windows software in general, and code-signing certificates aren't something a free/open-source hobby project can typically obtain, so this warning is expected to keep appearing regardless of any change made to the scripts themselves.
-
-If you see a **"Windows protected your PC"** dialog after downloading `WerZatSonGUI_Installer.exe`:
-
-1. Click **More info**
-2. Click the **Run anyway** button that appears
-
-If your antivirus quarantines or deletes `setup.iss`, `setup_deps.ps1`, `upgrade_to_GUI.bat` or `WerZatSonGUI.pyw` instead of just warning about them, restore the file from quarantine (or re-download/re-extract it) and add an exclusion for the WerZatSonGUI folder if your antivirus lets you.
-
-If you'd rather sidestep the flagged installer entirely, and you already have a working WerZatSong or WerZatSonGUI install, see [*Recommended (if you already have WerZatSong or an older WerZatSonGUI installed): upgrade_to_GUI.zip*](#recommended-(if-you-already-have-WerZatSong-or-an-older-WerZatSonGUI-installed):-upgrade_to_GUI.zip) above. `upgrade_to_GUI.bat` reuses your existing Node.js/Python/Rust/C++ Build Tools/FFmpeg install and never needs to touch WinGet or the guided Visual Studio/Rust installers at all.
 
 ## Credits
 
