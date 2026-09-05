@@ -3,7 +3,7 @@
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
 ![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-orange)
 
-**WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*Features of the GUI*](#features-of-the-gui) for more info.
+**WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*Features*](#features) for more info.
 
 This document explains how to install WerZatSonGUI, set it up for the first time, and use every part of its interface.
 > **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](README_ITA.md).
@@ -13,8 +13,8 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
-- [Features of the GUI](#features-of-the-gui)
+- [Quick Start Guide](#quick-start-guide)
+- [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [First-Time Setup](#first-time-setup)
@@ -30,7 +30,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 ## Quick Start Guide
 
-### If you already have WerZatSong or an older WerZatSonGUI build:
+### If you *already have* WerZatSong or an older WerZatSonGUI version:
 
 1. **Download** and **extract in an empty folder** `upgrade_to_GUI.zip`.
 2. **Run** `upgrade_to_GUI.bat` and follow the instructions.
@@ -42,7 +42,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 6. **Select** your preferred search modes.
 7. Click on **Start WerZatSong**.
 
-### Otherwise, if you are a new user:
+### Otherwise, if you are a *new user:*
 1. **Download** and run `WerZatSonGUI_Installer.exe`.
 
 2. **Launch** the installer and follow the instructions; the wizard will make you install **Visual Studio Build Tools** and **Rust,** and take care of other dependencies automatically.
@@ -72,7 +72,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 8. **Select** your preferred search modes.
 9. Click on **Start WerZatSong**.
 
-## Features of the GUI
+## Features
 - Every [**WerZatSong**](https://github.com/Nel80s/WerZatSong) command is supported: all 4 search modes (**MusicBrainz (AcoustID), AudioTag, Shazam** and **Audfprint**) are here, and any number of them can be combined in a single scan.
 - Support for entire **Song Databases** thanks to a **batch-scanning engine,** which lets you add as many audio files as you want to the program: it will automatically scan at most 20-30 at a time, as efficiently as possible (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below). Links to the community-ran [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy) and [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) Song Databases are included in the program under the **Add Audio Files...** section.
 - A built-in script by **Mystic65**, which can automatically generate and search dozens of **tempo/pitch-shifted variations** of each file, to help catch songs that were sped up, slowed down, or pitched differently (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below).
