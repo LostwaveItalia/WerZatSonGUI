@@ -3,13 +3,13 @@
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
 ![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-orange)
 
+![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
+![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
+
 **WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*🌟 Features*](#-features) for more info.
 
 This document explains how to install WerZatSonGUI, set it up for the first time, and use every part of its interface.
 > **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](README_ITA.md).
-
-![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
-![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
 
 ## Table of Contents
 
