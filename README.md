@@ -31,21 +31,43 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 ## Quick Start
 
 ### If you already have WerZatSong or an older WerZatSonGUI build:
+
 1. **Download** and **extract in an empty folder** `upgrade_to_GUI.zip`.
 2. **Run** `upgrade_to_GUI.bat` and follow the instructions.
-3. **Launch** the app. *(If you cannot double click on it directly, open the `WerZatSonGUI.pyw` file with `pythonw.exe` or `pyw.exe`)*
+3. **Launch** the app.
+> If you cannot double click on it directly, open the `WerZatSonGUI.pyw` file with `Python`, `pythonw.exe` or `pyw.exe`-
+
 4. **Add** your songs via the **Add Audio Files...** button.
 5. **Add** your pklz files via the **Add PKLZ Files...** button.
-6. Click on **Start WerZatSong**.
-
-### Otherwise:
-1. **Download** and run `WerZatSonGUI_Installer.exe`.
-2. **Launch** the installer and follow the instructions; the wizard will install Node.js, Python, FFmpeg and other dependencies automatically.
-3. (If your PC restarts) **Re-launch** the installer to finish installing dependencies.
-4. **Enter** your API keys (AcoustID, AudioTag) and Discord Webhook when prompted.
-5. **Add** your songs via the **Add Audio Files...** button.
-6. **Add** your pklz files via the **Add PKLZ Files...** button.
+6. **Select** your preferred search modes.
 7. Click on **Start WerZatSong**.
+
+### Otherwise, if you are a new user:
+1. **Download** and run `WerZatSonGUI_Installer.exe`.
+
+2. **Launch** the installer and follow the instructions; the wizard will make you install **Visual Studio Build Tools** and **Rust,** and take care of other dependencies automatically.
+> Make sure to select the **"Desktop development with C++ workload** when installing the Visual Studio Build Tools. If you already have Visual Studio, **edit** your "Visual Studio Build Tools 2026" installation to add that option.
+
+3. (If your PC restarts) **Re-launch** the installer to finish installing dependencies.
+
+4. **Double click** the shortcut created on the desktop, or **run** `WerZatSonGUI.pyw` in the installation folder.
+
+> If you cannot double click on it directly, open the `WerZatSonGUI.pyw` file with `Python`, `pythonw.exe` or `pyw.exe`-
+
+> Read [*"Troubleshooting: How to Fix the "missing dependencies" / "Crash prevented!" Startup Error"*](#troubleshooting-how-to-fix-the-missing-dependencies--crash-prevented-startup-error) if you are having trouble starting the program.
+
+5. **Enter** your API keys (AcoustID, AudioTag) and Discord Webhook when prompted.
+
+> See [*"How to Get a Discord Webhook URL"*](#how-to-get-a-discord-webhook-url) below.
+
+> See [*"How to Get an AudioTag API Key"*](#how-to-get-an-audiotag-api-key) below.
+
+> See [*"How to Get an AcoustID (MusicBrainz) API Key"*](#how-to-get-an-acoustid-musicbrainz-api-key) below.
+
+6. **Add** your songs via the **Add Audio Files...** button.
+7. **Add** your pklz files via the **Add PKLZ Files...** button.
+8. **Select** your preferred search modes.
+9. Click on **Start WerZatSong**.
 
 ## Features of the GUI
 - Every [**WerZatSong**](https://github.com/Nel80s/WerZatSong) command is supported: all 4 search modes (**MusicBrainz (AcoustID), AudioTag, Shazam** and **Audfprint**) are here, and any number of them can be combined in a single scan.
