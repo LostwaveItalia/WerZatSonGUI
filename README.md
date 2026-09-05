@@ -28,7 +28,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 - [SmartScreen / Antivirus Warnings](#smartscreen--antivirus-warnings)
 - [Credits](#credits)
 
-## Quick Start
+## Quick Start Guide
 
 ### If you already have WerZatSong or an older WerZatSonGUI build:
 
@@ -58,7 +58,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 > Read [*"Troubleshooting: How to Fix the "missing dependencies" / "Crash prevented!" Startup Error"*](#troubleshooting-how-to-fix-the-missing-dependencies--crash-prevented-startup-error) if you are having trouble starting the program.
 
 
-5. **Enter** your API keys (AcoustID, AudioTag) and Discord Webhook when prompted.
+5. **Enter** your Discord Webhook and API keys (AcoustID, AudioTag) when prompted.
 
 > See [*"How to Get a Discord Webhook URL"*](#how-to-get-a-discord-webhook-url) below.
 
