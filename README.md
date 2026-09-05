@@ -48,6 +48,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 2. **Launch** the installer and follow the instructions; the wizard will make you install **Visual Studio Build Tools** and **Rust,** and take care of other dependencies automatically.
 > Make sure to select the **"Desktop development with C++ workload** when installing the Visual Studio Build Tools. If you already have Visual Studio, **edit** your "Visual Studio Build Tools 2026" installation to add that option.
 
+
 3. (If your PC restarts) **Re-launch** the installer to finish installing dependencies.
 
 4. **Double click** the shortcut created on the desktop, or **run** `WerZatSonGUI.pyw` in the installation folder.
@@ -56,6 +57,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 > Read [*"Troubleshooting: How to Fix the "missing dependencies" / "Crash prevented!" Startup Error"*](#troubleshooting-how-to-fix-the-missing-dependencies--crash-prevented-startup-error) if you are having trouble starting the program.
 
+
 5. **Enter** your API keys (AcoustID, AudioTag) and Discord Webhook when prompted.
 
 > See [*"How to Get a Discord Webhook URL"*](#how-to-get-a-discord-webhook-url) below.
@@ -63,6 +65,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 > See [*"How to Get an AudioTag API Key"*](#how-to-get-an-audiotag-api-key) below.
 
 > See [*"How to Get an AcoustID (MusicBrainz) API Key"*](#how-to-get-an-acoustid-musicbrainz-api-key) below.
+
 
 6. **Add** your songs via the **Add Audio Files...** button.
 7. **Add** your pklz files via the **Add PKLZ Files...** button.
