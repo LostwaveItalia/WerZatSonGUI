@@ -14,7 +14,7 @@ Este documento explica como instalar o WerZatSonGUI, configurá-lo pela primeira
 
 > **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](README_ITA.md).
 
-> **Pour les francophones** : une traduction intégrale de ce document est disponible dans [**README_FRA.md**](README_FRA.md).
+> **Pour les francophones**: une traduction intégrale de ce document est disponible dans [**README_FRA.md**](README_FRA.md).
 
 ## Tabela de Conteúdos
 
