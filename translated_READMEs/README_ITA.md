@@ -47,7 +47,7 @@ Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvi
 1. **Scarica** ed **estrai in una cartella vuota** `upgrade_to_GUI.zip`.
 2. **Esegui** `upgrade_to_GUI.bat` e segui le istruzioni.
 3. **Avvia** l'app.
-> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`-
+> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`
 
 4. **Aggiungi** canzoni cliccando su **Aggiungi file audio...**.
 5. **Aggiungi** file pklz cliccando su **Aggiungi file PKLZ...**.
@@ -64,7 +64,7 @@ Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvi
 
 4. **Fai doppio clic** sul collegamento creato sul tuo Desktop, oppure **esegui** `WerZatSonGUI.pyw` nella cartella di installazione.
 
-> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`-
+> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`
 
 > Leggi [*"Risoluzione dei problemi: Come risolvere l'errore "missing dependencies" / "Crash prevented!""*](#risoluzione-dei-problemi-come-risolvere-lerrore-di-avvio-missing-dependencies--crash-prevented) se hai problemi ad avviare il programma.
 
