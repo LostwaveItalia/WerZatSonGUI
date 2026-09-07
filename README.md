@@ -11,7 +11,7 @@
 This document explains how to install WerZatSonGUI, set it up for the first time, and use every part of its interface.
 > **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](translated_READMEs/README_ITA.md).
 
-> **Pour les francophones** : une traduction intégrale de ce document est disponible dans [**README_FRA.md**](translated_READMEs/README_FRA.md).
+> **Pour les francophones**: une traduction intégrale de ce document est disponible dans [**README_FRA.md**](translated_READMEs/README_FRA.md).
 
 > **Para quem fala português**: uma tradução completa deste documento está disponível em [**README_POR.md**](translated_READMEs/README_POR.md).
 
