@@ -2,6 +2,7 @@
 __pycache__/
 logs/
 node_modules/
+output/
 
 # Files
 package-lock.json
