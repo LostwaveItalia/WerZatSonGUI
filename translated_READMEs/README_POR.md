@@ -69,7 +69,7 @@ Este documento explica como instalar o WerZatSonGUI, configurá-lo pela primeira
 
 > Se não conseguir clicar duas vezes diretamente, abra o arquivo `WerZatSonGUI.pyw` com `Python`, `pythonw.exe` ou `pyw.exe`.
 
-> Leia [*"Solução de Problemas: Como Corrigir o Erro de Inicialização 'dependências ausentes' / 'Falha evitada!'"*](#solu%C3%A7%C3%A3o-de-problemas-como-corrigir-o-erro-de-inicializa%C3%A7%C3%A3o-depend%C3%AAncias-ausentes--falha-evitada) se estiver tendo problemas para iniciar o programa.
+> Leia [*"Solução de Problemas: Como Corrigir o Erro de Inicialização 'Missing Dependencies' / 'Crash Prevented!'"*](#solu%C3%A7%C3%A3o-de-problemas-como-corrigir-o-erro-de-inicializa%C3%A7%C3%A3o-missing-dependencies--crash-prevented-) se estiver tendo problemas para iniciar o programa.
 
 
 5. **Insira** seu Webhook do Discord e as chaves de API (AcoustID, AudioTag) quando solicitado.
@@ -141,9 +141,9 @@ Quando o computador reiniciar e a instalação terminar, você pode usar o atalh
 
 O Visual Studio Build Tools e o Rust são ambos intencionalmente **não** instalados silenciosamente em segundo plano. O Visual Studio Build Tools em particular é uma instalação grande e lenta, e as versões anteriores deste instalador não conseguiam detectar de forma confiável uma instalação existente, então acabavam reinstalando (e baixando novamente centenas de componentes) a cada execução, mesmo quando já estavam presentes. Instalá-lo (e o Rust) agora abre o instalador oficial correto para sua versão do Windows no navegador e simplesmente aguarda você confirmar quando terminar, o que é mais lento para clicar, mas muito mais previsível e muito menos propenso a falhar silenciosamente ou inchar de tamanho.
 
-#### Solução de Problemas: Como Corrigir o Erro de Inicialização "dependências ausentes" / "Falha evitada!"
+#### Solução de Problemas: Como Corrigir o Erro de Inicialização "Missing Dependencies" / "Crash Prevented!"
 
-![Erro de Inicialização "dependências ausentes" / "Falha evitada!"](../assets/images/missing-dependencies-error.png)
+![Erro de Inicialização "Missing Dependencies" / "Crash Prevented!"](../assets/images/missing-dependencies-error.png)
 
 Se você usou o instalador do WerZatSonGUI e está recebendo um erro de travamento ao tentar iniciar o programa (como o mostrado acima), isso geralmente significa que o Visual Studio Build Tools não foi instalado corretamente.
 Esse é um problema conhecido e uma correção muito fácil!

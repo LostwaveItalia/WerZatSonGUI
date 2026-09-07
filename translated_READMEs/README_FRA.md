@@ -69,7 +69,7 @@ Ce document explique comment installer WerZatSonGUI, le configurer pour la premi
 
 > Si vous ne pouvez pas double-cliquer directement, ouvrez le fichier `WerZatSonGUI.pyw` avec `Python`, `pythonw.exe` ou `pyw.exe`.
 
-> Lisez [*"Dépannage: Comment corriger l'erreur de démarrage "dépendances manquantes" / "Crash évité!""*](#dépannage--comment-corriger-lerreur-de-démarrage--dépendances-manquantes--crash-évité-) si vous rencontrez des difficultés pour démarrer le programme.
+> Lisez [*"Dépannage: Comment corriger l'erreur de démarrage "Missing Dependencies" / "Crash Prevented!""*](#dépannage--comment-corriger-lerreur-de-démarrage--missing-dependencies--crash-prevented-) si vous rencontrez des difficultés pour démarrer le programme.
 
 
 5. **Saisissez** votre Webhook Discord et vos clés API (AcoustID, AudioTag) lorsque vous y êtes invité.
@@ -140,9 +140,9 @@ Lorsque votre ordinateur redémarre et que l'installation est terminée, vous po
 
 Visual Studio Build Tools et Rust sont tous deux intentionnellement **non** installés silencieusement en arrière-plan. Visual Studio Build Tools en particulier est une installation volumineuse et lente, et les versions précédentes de cet installateur ne pouvaient pas détecter de manière fiable une installation existante, ce qui aboutissait à une réinstallation (et un re-téléchargement de centaines de composants) à chaque exécution, même lorsqu'il était déjà présent. L'installation de celui-ci (et de Rust) ouvre désormais le programme d'installation officiel correct pour votre version de Windows dans votre navigateur et attend simplement que vous confirmiez une fois que vous avez terminé, ce qui est plus lent à cliquer mais beaucoup plus prévisible et beaucoup moins susceptible d'échouer silencieusement ou de gonfler en taille.
 
-#### Dépannage: Comment corriger l'erreur de démarrage "dépendances manquantes" / "Crash évité!"
+#### Dépannage: Comment corriger l'erreur de démarrage "Missing Dependencies" / "Crash Prevented!"
 
-![Erreur de démarrage "dépendances manquantes" / "Crash évité!"](../assets/images/missing-dependencies-error.png)
+![Erreur de démarrage "Missing Dependencies" / "Crash Prevented!"](../assets/images/missing-dependencies-error.png)
 
 Si vous avez utilisé l'installateur WerZatSonGUI et que vous obtenez une erreur de plantage en essayant de démarrer le programme (comme celle illustrée ci-dessus), cela signifie généralement que les Visual Studio Build Tools n'ont pas été installés correctement.
 C'est un problème connu et très facile à corriger!
