@@ -10,7 +10,7 @@
 Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvio, e usare ogni parte della sua interfaccia.
 > **For English speakers**: a full English translation of this document is available in [**README.md**](../README.md).
 
-> **Pour les francophones** : une traduction intégrale de ce document est disponible dans [**README_FRA.md**](README_FRA.md).
+> **Pour les francophones**: une traduction intégrale de ce document est disponible dans [**README_FRA.md**](README_FRA.md).
 
 > **Para quem fala português**: uma tradução completa deste documento está disponível em [**README_POR.md**](README_POR.md).
 
