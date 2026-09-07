@@ -1,60 +1,93 @@
-
 # WerZatSonGUI
-
 ![Piattaforma: Windows x64](https://img.shields.io/badge/Piattaforma-Windows%20x64-blue)
-![Versione: 1.3.1](https://img.shields.io/badge/Versione-1.3.1-orange)
+![Versione: 1.4.0](https://img.shields.io/badge/Versione-1.4.0-orange)
 
-**WerZatSonGUI** è un'app desktop per Windows x64 che aggiunge un'interfaccia grafica completa a [**WerZatSong**](https://github.com/Nel80s/WerZatSong), il programma originario a riga di comando per la ricerca di canzoni. Se hai già usato WerZatSong, quest'app funziona essenzialmente allo stesso modo: semplicemente non devi più aprire manualmente un terminale e digitare comandi per usarlo. Leggi [*Funzionalità della GUI*](#funzionalit%C3%A0-della-gui) per maggiori informazioni.
+![WerZatSonGUI durante una scansione in modalità scura](../assets/images/gui_screenshot_1.png)
+![WerZatSonGUI durante una scansione in modalità chiara](../assets/images/gui_screenshot_2.png)
+
+**WerZatSonGUI** è un'app desktop per Windows x64 che aggiunge un'interfaccia grafica completa a [**WerZatSong**](https://github.com/Nel80s/WerZatSong), il programma originario a riga di comando per la ricerca di canzoni. Se hai già usato WerZatSong, quest'app funziona essenzialmente allo stesso modo: semplicemente non devi più aprire manualmente un terminale e digitare comandi per usarlo. Leggi [*🌟 Funzionalità*](#-funzionalità) per maggiori informazioni.
 
 Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvio, e usare ogni parte della sua interfaccia.
-> **For English speakers**: a full English translation of this document is available in [**README.md**](README.md).
+> **For English speakers**: a full English translation of this document is available in [**README.md**](../README.md).
 
-![WerZatSonGUI durante una scansione in modalità scura](assets/images/gui_screenshot_1.png)
-![WerZatSonGUI durante una scansione in modalità chiara](assets/images/gui_screenshot_2.png)
+> **Pour les francophones** : une traduction intégrale de ce document est disponible dans [**README_FRA.md**](README_FRA.md).
+
+> **Para quem fala português**: uma tradução completa deste documento está disponível em [**README_POR.md**](README_POR.md).
 
 ## Indice
 
-- [Avvio rapido](#avvio-rapido)
-- [Funzionalità della GUI](#funzionalit%C3%A0-della-gui)
+**Informazioni Generali:**
+- [🚀 Guida Rapida Al Setup](#-guida-rapida-al-setup)
+- [🌟 Funzionalità](#-funzionalità)
+
+**Guide (Configurazione):**
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
 - [Primo avvio](#primo-avvio)
+- [Avvisi di SmartScreen / Antivirus](#avvisi-di-smartscreen--antivirus)
+
+**Guide (Uso della GUI):**
 - [Usare WerZatSonGUI](#usare-werzatsongui)
 - [Modalità di ricerca spiegate](#modalit%C3%A0-di-ricerca-spiegate)
 - [Avviare una scansione: modalità veloce contro modalità lunga](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga)
 - [File processati e PROCESSED.txt](#file-processati-e-processedtxt)
 - [Dove trovare i risultati](#dove-trovare-i-risultati)
 - [Formato dei log](#formato-dei-log)
+
+**Come contribuire al progetto:**
 - [Aggiungere una lingua / Traduzioni](#aggiungere-una-lingua--traduzioni)
-- [Avvisi di SmartScreen / Antivirus](#avvisi-di-smartscreen--antivirus)
+
+**Crediti:**
 - [Crediti](#crediti)
 
-## Avvio rapido
+## 🚀 Guida rapida al setup
 
-### Se hai già WerZatSong o una vecchia build di WerZatSonGUI:
+### 1️⃣ Se hai *già* WerZatSong o una vecchia versione di WerZatSonGUI:
+
 1. **Scarica** ed **estrai in una cartella vuota** `upgrade_to_GUI.zip`.
 2. **Esegui** `upgrade_to_GUI.bat` e segui le istruzioni.
-3. **Avvia** l'app. *(Se non puoi farci doppio clic direttamente, apri `WerZatSonGUI.pyw` con `pythonw.exe` o `pyw.exe`)*
-4. **Aggiungi** canzoni tramite il pulsante **Aggiungi file audio...**.
-5. **Aggiungi** file pklz tramite il pulsante **Aggiungi file PKLZ...**.
-6. Clicca su **Avvia WerZatSong**.
+3. **Avvia** l'app.
+> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`-
 
-### Altrimenti:
-1. **Scarica** ed esegui `WerZatSonGUI_Installer.exe`.
-2. **Avvia** l'installer e segui le istruzioni; la procedura guidata installerà automaticamente Node.js, Python, FFmpeg e altre dipendenze.
-3. (Se il tuo PC si riavvia) **Riavvia** l'installer per finire di scaricare le dipendenze.
-4. **Inserisci** le tue chiavi API (AcoustID, AudioTag) e il Webhook di Discord quando richiesto.
-5. **Aggiungi** canzoni tramite il pulsante **Aggiungi file audio...**.
-6. **Aggiungi** file pklz tramite il pulsante **Aggiungi file PKLZ...**.
+4. **Aggiungi** canzoni cliccando su **Aggiungi file audio...**.
+5. **Aggiungi** file pklz cliccando su **Aggiungi file PKLZ...**.
+6. **Seleziona** le tue modalità di ricerca preferite.
 7. Clicca su **Avvia WerZatSong**.
 
-## Funzionalità della GUI
+### 2️⃣ Se sei un *nuovo utente*:
+1. **Scarica** ed esegui `WerZatSonGUI_Installer.exe`.
+
+2. **Avvia** l'installer e segui le istruzioni; la procedura guidata ti farà installare **Visual Studio Build Tools** e **Rust**, e si occuperà automaticamente delle altre dipendenze.
+> Assicurati di selezionare il workload **"Sviluppo di applicazioni desktop con C++"** quando installi i Visual Studio Build Tools. Se hai già Visual Studio, **trova** e **modifica** la tua ultima installazione di "Visual Studio Build Tools" (V.S.B.T. 2026, per ora, nel 2026) per aggiungere quell'opzione.
+
+3. (Se il tuo PC si riavvia) **Riavvia** l'installer per finire di installare le dipendenze.
+
+4. **Fai doppio clic** sul collegamento creato sul tuo Desktop, oppure **esegui** `WerZatSonGUI.pyw` nella cartella di installazione.
+
+> Se non puoi farci doppio clic direttamente, apri il file `WerZatSonGUI.pyw` con `Python`, `pythonw.exe` o `pyw.exe`-
+
+> Leggi [*"Risoluzione dei problemi: Come risolvere l'errore "missing dependencies" / "Crash prevented!""*](#risoluzione-dei-problemi-come-risolvere-lerrore-di-avvio-missing-dependencies--crash-prevented) se hai problemi ad avviare il programma.
+
+5. **Inserisci** il tuo Webhook di Discord e le chiavi API (AcoustID, AudioTag) quando richiesto.
+
+> Vedi [*"Come ottenere un link webhook di Discord"*](#come-ottenere-un-link-webhook-di-discord) più sotto.
+
+> Vedi [*"Come ottenere una chiave API di AudioTag"*](#come-ottenere-una-chiave-api-di-audiotag) più sotto.
+
+> Vedi [*"Come ottenere una chiave API di AcoustID (MusicBrainz)"*](#come-ottenere-una-chiave-api-di-acoustid-musicbrainz) più sotto.
+
+6. **Aggiungi** canzoni cliccando su **Aggiungi file audio...**.
+7. **Aggiungi** file pklz cliccando su **Aggiungi file PKLZ...**.
+8. **Seleziona** le tue modalità di ricerca preferite.
+9. Clicca su **Avvia WerZatSong**.
+
+## 🌟 Funzionalità
 - Ogni comando di [**WerZatSong**](https://github.com/Nel80s/WerZatSong) è supportato: tutte e 4 le modalità di ricerca (**MusicBrainz (AcoustID), AudioTag, Shazam** e **Audfprint**) sono presenti, e se ne può combinare un numero qualsiasi in una singola scansione.
-- Supporto per interi **Database di canzoni** grazie a un **motore di scansione in blocco**, che ti permette di aggiungere tutti i file audio che vuoi al programma: li scansionerà automaticamente al massimo 20-30 alla volta, nel modo più efficiente possibile (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto). I link ai Database di canzoni gestiti dalla community di [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy) e del server [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) sono inclusi nel programma sotto alla sezione **Aggiungi file audio...**.
+- Supporto per interi **Database di canzoni** grazie a un **motore di scansione in blocco**, che ti permette di aggiungere tutti i file audio che vuoi al programma: li scansionerà automaticamente al massimo 20-30 alla volta, nel modo più efficiente possibile (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto). I link ai Database di canzoni gestiti dalla community di [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), del server [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) e del [canale di @user-QLostwave (Q) su Youtube](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) sono inclusi nel programma sotto alla sezione **Aggiungi file audio...**.
 - Uno script integrato di **Mystic65**, che può generare e cercare automaticamente decine di **variazioni di tempo/tonalità** per ogni file, per aiutare a trovare canzoni che sono state velocizzate, rallentate o con tonalità alterata (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto).
 - Una **revisione di WerZatSong base** e dei **log più leggibili** (vedi [*Formato dei log*](#formato-dei-log) più sotto) grazie ad **EierkuchenHD.**
 - Una nuova sezione **File processati...**. Se hai una quantità importante di canzoni nella cartella di input, ora puoi decidere facilmente quali eseguire con WerZatSonGUI, **senza** dover spostare nulla fuori da quella cartella (vedi [*File processati e PROCESSED.txt*](#file-processati-e-processedtxt) più sotto).
-- Supporto per **più lingue** e **traduzioni.** Attualmente le lingue supportate sono Italiano e Inglese (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto).
+- Supporto per **più lingue** e **traduzioni.** Attualmente le lingue supportate sono italiano, inglese, francese e portoghese (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto).
 - Supporto per modalità **chiara** e **scura**.
 
 ## Requisiti
@@ -86,9 +119,9 @@ Prima della tua prima scansione, ti serviranno anche:
 2. Se il tuo Windows è impostato su una lingua diversa dall'italiano (e da altre lingue supportate), il programma di installazione ti chiederà di sceglierne una per la procedura guidata; la lingua dell'interfaccia dell'app stessa verrà poi automaticamente impostata di conseguenza (puoi comunque cambiarla in seguito nelle **Impostazioni avanzate**, vedi la [*scheda Generali*](#scheda-generali) più sotto)
 3. Nella schermata successiva, puoi scegliere se creare un **collegamento sul desktop** (selezionato di default) oltre alla solita voce nel menu Start
 4. Il programma di installazione si occuperà automaticamente di:
-   - Installare Node.js, Python 3.13 e FFmpeg se non sono già presenti sul tuo sistema, oppure aggiornarli se ne trova una copia già installata ma sotto la versione minima richiesta (tramite WinGet)
    - Rilevare un'eventuale installazione esistente dei C++ Build Tools di Visual Studio (2017 o successivo) e di Rust, saltandoli se già presenti.
    - Se uno dei due manca, aprire la pagina di download ufficiale corretta per la tua versione di Windows e mettersi in pausa, chiedendoti di completare tu quell'installazione prima di continuare (vedi *"Perché alcune installazioni non sono completamente automatiche"* più sotto). **Una volta terminata una delle installazioni, dovrai andare sulla schermata di PowerShell aperta per l'installazione e premere INVIO manualmente per continuare.**
+   - Installare Node.js, Python 3.13 e FFmpeg se non sono già presenti sul tuo sistema, oppure aggiornarli se ne trova una copia già installata ma sotto la versione minima richiesta (tramite WinGet)
    - Eseguire `npm install`
    - Eseguire `pip install -r requirements.txt`
    - Installare pip e tutti i pacchetti Python richiesti
@@ -104,7 +137,7 @@ I C++ Build Tools di Visual Studio e Rust non vengono installati silenziosamente
 
 #### Risoluzione dei problemi: Come risolvere l'errore di avvio "missing dependencies" / "Crash prevented!"
 
-!["missing dependencies" / "Crash prevented!" Errore di avvio](assets/images/missing-dependencies-error.png)
+!["missing dependencies" / "Crash prevented!" Errore di avvio](../assets/images/missing-dependencies-error.png)
 
 Se hai utilizzato l'installer di WerZatSonGUI e hai ricevuto un errore di crash quando hai provato ad avviare il programma (come quello mostrato qui sopra), di solito significa che i Visual Studio Build Tools non sono stati installati correttamente.
 È un problema noto e molto facile da risolvere!
@@ -132,7 +165,7 @@ Una volta terminata completamente l'installazione, riavvia il PC per assicurarti
 
 ##### Passaggio 5: Esegui il comando di correzione
 Ora, riguarda il messaggio di errore del Passaggio 1. Vedrai una riga di testo che assomiglia a questa: 
-`C:\Program Files\Python313\python.exe -m pip install -r C:\WerZatSonGUI\requirements.txt`
+`"C:\Program Files\Python313\python.exe" -m pip install -r C:\WerZatSonGUI\requirements.txt`
 
 Basta che copi e incolli, uguale uguale, quella riga, `"C:\Program Files\Python313\python.exe" -m pip install -r C:\WerZatSonGUI\requirements.txt`, nella tua finestra di cmd, poi premi **Invio**.
 
@@ -151,7 +184,7 @@ Fai doppio clic su di esso e lo script:
    - **Un'installazione legacy di WerZatSong senza GUI** (un `werzatsong.js` direttamente dentro la cartella, senza `WerZatSonGUI.pyw`): ristruttura la cartella per te, spostando tutto quello che c'è attualmente in una nuova sottocartella `assets`, spostando `assets\logs` di nuovo fuori in `logs`, e spostando il contenuto di `assets\input` in `db_inputs\legacy_werzatsong_input` (in modo che qualsiasi cosa avessi già in coda non vada persa, ma solo spostata dove WerZatSonGUI si aspetta di trovare i file di input aggiunti manualmente)
    - **Un'installazione esistente di WerZatSonGUI** (un `WerZatSonGUI.pyw` già dentro la cartella): la aggiorna sul posto invece, senza ristrutturare nulla
 4. In entrambi i casi, sostituisce poi l'intero contenuto della cartella `assets` (`werzatsong.js` e tutto ciò che si trova sotto `utils`, `scripts`, `libs`, `resources`, `images`, `localizations`, ecc.) con quello della versione attuale, e copia al suo interno gli ultimi `WerZatSonGUI.pyw`, `requirements.txt` e `package.json` - **la tua cartella `assets\database` (i fingerprint pklz) e il file `assets\.env` (chiavi API/webhook) non vengono mai toccati né eliminati**, dato che nessuno dei due fa parte dei file che vengono copiati
-   - Quando si migra un'installazione legacy, viene copiato anche `config.json`, dato che non esiste ancora una configurazione GUI da preservare
+   - Quando si migra un'installazione legacy, viene copiato anche `config.json` (non esiste ancora una configurazione GUI da preservare)
    - Quando si aggiorna un'installazione WerZatSonGUI esistente, **`config.json` viene deliberatamente lasciato intatto**, in modo che le tue cartelle, il tema e la lingua restino esattamente come li avevi lasciati; lo script elimina anche ogni eventuale file residuo tipo `advanced_settings_explainations.json` da `assets`, un vecchio file di spiegazione delle impostazioni risalente a prima della localizzazione, ormai completamente sostituito dalla cartella `assets\localizations` (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto), che altrimenti rimarrebbe lì inutilizzato
 5. Esegue `pip install -r requirements.txt` per te
 6. Crea (o aggiorna) un collegamento sul desktop chiamato **WerZatSonGUI** che punta alla cartella, esattamente come il collegamento creato dal programma di installazione stesso
@@ -174,7 +207,7 @@ Se un passaggio del programma di installazione automatico fallisce, puoi install
 
     Dovresti vedere i numeri di versione per ognuno, in modo simile a questo:
 
-    ![Programs](assets/images/programs.png)
+    ![Programs](../assets/images/programs.png)
 
 2. **Installa le dipendenze di Node.js**:
 
@@ -195,13 +228,13 @@ Se un passaggio del programma di installazione automatico fallisce, puoi install
             - Installa Rust dal [sito ufficiale](https://www.rust-lang.org/tools/install) (oppure direttamente tramite il [download di rustup-init.exe](https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe))
             - Dopo l'installazione, verifica che funzioni eseguendo `rustc --version` nel terminale
             - Una volta installato Rust, riprova i comandi `pip install` sopra
-            ![Rust Error](assets/images/rust-error.png)
+            ![Rust Error](../assets/images/rust-error.png)
         - **Errore dei C++ Build Tools** (vedi screenshot sotto):
             - Installa i C++ Build Tools di Visual Studio: su **Windows 11** usa la [versione corrente](https://aka.ms/vs/stable/vs_BuildTools.exe); su **Windows 10** usa invece [Visual Studio 2022 Build Tools](https://aka.ms/vs/17/release/vs_buildtools.exe) (la versione più recente ancora supportata lì). Qualsiasi versione dal 2017 in poi funziona allo stesso modo, questo è solo il link di download stabile, attuale
             - Durante l'installazione, seleziona il workload *"Sviluppo di applicazioni desktop con C++"*. Non serve il resto di Visual Studio
             - Dopo l'installazione, riavvia il computer
             - Riprova i comandi `pip install` sopra
-            ![Errore di Shazam](assets/images/shazam-error.png)
+            ![Errore di Shazam](../assets/images/shazam-error.png)
 
 4. **Scarica il codice sorgente** cliccando su `<> Code` -> `Download ZIP`, quindi estrai il file ZIP con il codice sorgente dove preferisci. I seguenti file/cartelle possono poi essere eliminati, dato che vengono usati solo dal programma di installazione:
 	```
@@ -210,6 +243,7 @@ Se un passaggio del programma di installazione automatico fallisce, puoi install
 	setup_deps.ps1
 	cartella Languages
 	cartella output
+    cartella _upgrade_script
 	```
 
 5. **Avvia WerZatSonGUI** facendo doppio clic su `WerZatSonGUI.pyw` (oppure eseguendo `pythonw WerZatSonGUI.pyw` da un terminale in quella cartella)
@@ -223,7 +257,7 @@ La primissima volta che avvii WerZatSonGUI, il programma nota che non esiste anc
 3. Esegue `pip install -r requirements.txt` in una sua finestra di terminale, chiudendola automaticamente una volta finito.
 4. Apre poi una seconda finestra di terminale che ti chiede, uno alla volta, il tuo **link webhook di Discord**, la tua **chiave API di AudioTag** e la tua **chiave API di AcoustID**:
 
-    ![Setup](assets/images/setup.png)
+    ![Setup](../assets/images/setup.png)
 
     Incolla ogni valore quando richiesto e premi Invio. Se qualcosa che inserisci viene rifiutato (una chiave o un webhook non validi), WerZatSonGUI riaprirà automaticamente questo terminale per farti riprovare: non serve riavviare l'intera app.
 5. Una volta che tutti e tre sono stati accettati, vengono salvati in `assets\.env` e WerZatSonGUI si riavvia automaticamente mostrando l'interfaccia completa.
@@ -263,13 +297,26 @@ Questa è la chiave che alimenta la modalità di ricerca **MusicBrainz (AcoustID
 
 Se hai intenzione di usare la modalità di ricerca **Audfprint**, puoi scaricare le cartelle di database create dalla community (contenenti file di fingerprint `.pklz`) da [**qui**](https://wzs.cosine.club), per poi posizionarle dentro la tua **cartella del database Audfprint**: puoi trascinarle usando il pulsante **Apri...** accanto ad essa nella sezione **Cartelle predefinite**, oppure usare il pulsante **Aggiungi file PKLZ...** in fondo alla finestra (che include anche un link **Database PKLZ pubblico...** che porta direttamente allo stesso sito). Ogni cartella di primo livello funge da propria collezione indipendente di fingerprint (per esempio, suddivisa per genere o fonte):
 
-![Database](assets/images/database.png)
+![Database](../assets/images/database.png)
 
 Puoi in seguito restringere una scansione a una sola di queste sottocartelle usando **"Usa solo i fingerprint di questa sottocartella"** nelle **Impostazioni avanzate**.
 
+## Avvisi di SmartScreen / Antivirus
+
+Dato che `WerZatSonGUI_Installer.exe`, `setup_deps.ps1` e `WerZatSonGUI.pyw` non sono firmati con un certificato di firma del codice a pagamento (che mi costerebbe una fortuna, che non ho modo di spendere), SmartScreen di Windows e alcuni motori antivirus potrebbero segnalarli come provenienti da un "Editore sconosciuto" o persino metterli in quarantena. Questa è un'euristica di fiducia/reputazione basata su quanto un file sia nuovo e diffuso, **non** un'indicazione che ci sia effettivamente qualcosa di dannoso. È un effetto collaterale ben noto dei software Windows distribuiti in modo indipendente in generale, e i certificati di firma del codice non sono qualcosa che un progetto hobbistico gratuito/open source può normalmente ottenere, quindi ci si aspetta che questo avviso continui a comparire indipendentemente da qualsiasi modifica apportata agli script stessi.
+
+Se vedi una finestra **"Windows ha protetto il tuo PC"** dopo aver scaricato `WerZatSonGUI_Installer.exe`:
+
+1. Clicca su **Ulteriori informazioni**
+2. Clicca sul pulsante **Esegui comunque** che appare
+
+Se il tuo antivirus mette in quarantena o elimina `setup.iss`, `setup_deps.ps1`, `upgrade_to_GUI.bat` o `WerZatSonGUI.pyw` invece di limitarsi ad avvisarti, ripristina il file dalla quarantena (o riscarica/riestrai di nuovo l'archivio) e aggiungi un'esclusione per la cartella di WerZatSonGUI se il tuo antivirus te lo permette.
+
+Se preferisci evitare del tutto il programma di installazione segnalato, e hai già un'installazione funzionante di WerZatSong o WerZatSonGUI, vedi [*Consigliato (se hai già WerZatSong o una vecchia versione di WerZatSonGUI installata): upgrade_to_GUI.zip*](#consigliato-se-hai-gi%C3%A0-werzatsong-o-una-vecchia-versione-di-werzatsongui-installata-upgrade_to_guizip) più sopra. `upgrade_to_GUI.bat` riutilizza la tua installazione esistente di Node.js/Python/Rust/C++ Build Tools/FFmpeg e non ha mai bisogno di toccare WinGet o i programmi di installazione guidati di Visual Studio/Rust.
+
 ## Usare WerZatSonGUI
 
-Una volta completata la configurazione, WerZatSonGUI apre la sua interfaccia completa ogni volta che lo avvii. Sia in modalità a finestra che a schermo intero/massimizzata, la barra delle azioni in alto a destra (**Aggiungi file PKLZ...**, **Aggiungi file audio...**, **File processati...**, **Arresto forzato**, **Avvia WerZatSong**) resta sempre visibile e raggiungibile: se il resto dell'interfaccia non entra nello spazio disponibile (per esempio con sia **Chiavi API e Webhook** che **Cartelle predefinite** espanse su uno schermo più piccolo), la sezione sopra la barra delle azioni scorre invece di spingerla fuori dallo schermo.
+Una volta completata la configurazione, WerZatSonGUI apre la sua interfaccia completa ogni volta che lo avvii. Sia in modalità a finestra che a schermo intero/massimizzata, la barra delle azioni in alto (**Aggiungi file PKLZ...**, **Aggiungi file audio...**, **File processati...**, **Arresto forzato**, **Avvia WerZatSong**) resta sempre visibile e raggiungibile. Se il resto dell'interfaccia non entra nello spazio disponibile (per esempio con sia **Chiavi API e Webhook** che **Cartelle predefinite** espanse su uno schermo più piccolo), la sezione sopra la barra delle azioni scorre invece di spingerla fuori dallo schermo.
 
 ### Intestazione
 
@@ -277,7 +324,7 @@ Il logo e il titolo in alto a sinistra, e un pulsante **Crediti** che apre un pi
 
 ### Console
 
-Un terminale. Ogni volta che WerZatSonGUI esegue un comando in background (durante la configurazione, o mentre è in corso una scansione) il suo output appare qui in tempo reale. Puoi ingrandire o rimpicciolire il suo testo in qualsiasi momento con **Ctrl + rotellina del mouse**, **Ctrl + più/meno**, oppure riportarlo alla dimensione predefinita con **Ctrl + 0**. Utile per leggere su uno schermo piccolo o un flusso di righe di log molto dense. Questo non interferisce mai con lo scorrimento normale della console o con qualsiasi altra scorciatoia da tastiera.
+Un terminale in tempo reale. Ogni volta che WerZatSonGUI esegue un comando in background (durante la configurazione, o mentre è in corso una scansione) il suo output appare qui in tempo reale. Puoi ingrandire o rimpicciolire il suo testo in qualsiasi momento con **Ctrl + rotellina del mouse**, **Ctrl + più/meno**, oppure riportarlo alla dimensione predefinita con **Ctrl + 0**, comodo per leggere su uno schermo piccolo o un flusso di righe di log molto dense. Questo non interferisce mai con lo scorrimento normale della console o con qualsiasi altra scorciatoia da tastiera.
 
 ### Chiavi API e Webhook (.env)
 
@@ -308,7 +355,7 @@ Suddivise in cinque schede in modo che le impostazioni correlate siano raggruppa
 
 - **Segna tutti i file audio come processati in:** utile se hai molti file nella tua cartella di input, e vuoi eseguirne solo alcuni specifici. Segna tutti i file audio nella tua cartella di input come **processati** in modalità **Veloce** (senza generazione di variazioni di velocità aggiuntive), modalità **Lunga** (file originali e variazioni aggiuntive) oppure **entrambe** le modalità, in modo da poter eliminare manualmente le righe delle canzoni che non vuoi eseguire modificando **PROCESSED.txt.** Premere uno qualsiasi dei 3 pulsanti **sovrascrive** il tuo file PROCESSED.txt attuale (vedi [*File processati e PROCESSED.txt*](#file-processati-e-processedtxt) più sotto).
 - **Tema:** cambia l'aspetto visivo dell'applicazione. Impostalo su **Chiaro,** **Scuro,** o **Predefinito di sistema** per adattarlo automaticamente alle impostazioni del tuo sistema operativo.
-- **Lingua:** passa l'interfaccia da **Inglese** a **Italiano** e viceversa. Ha effetto immediato, senza bisogno di riavviare (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto se vuoi aiutare ad aggiungerne altre).
+- **Lingua:** cambia l'interfaccia da **italiano** ad un'altra lingua supportata e viceversa. Ha effetto immediato, senza bisogno di riavviare (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto se vuoi aiutare ad aggiungerne altre).
 
 #### Scheda Modalità lunga
 
@@ -329,14 +376,14 @@ Suddivise in cinque schede in modo che le impostazioni correlate siano raggruppa
 #### Scheda Discord
 
 - **Usa un nome personalizzato per il Webhook:** sostituisce il nome visualizzato con cui il tuo webhook di Discord pubblica i messaggi, al posto del "WerZatSong" predefinito.
-- **Usa un'immagine personalizzata per il Webhook:** sostituisce l'immagine dell'avatar con cui il tuo webhook di Discord pubblica i messaggi. Il link deve iniziare con `https://cdn.discordapp.com/icons/` oppure `https://cdn.discordapp.com/avatars/`, altrimenti Discord non lo riconoscerà. Puoi ottenere un link formattato correttamente impostando l'immagine come immagine del profilo di un bot su Discord e copiando il link da lì.
+- **Usa un'immagine personalizzata per il Webhook:** sostituisce l'immagine dell'avatar con cui il tuo webhook di Discord pubblica i messaggi. Il link deve iniziare con `https://cdn.discordapp.com/icons/` oppure `https://cdn.discordapp.com/avatars/`, altrimenti Discord non lo riconoscerà. L'immagine dovrà essere in formato `.webp`. Puoi ottenere un link formattato correttamente impostando l'immagine come immagine del profilo di un bot su Discord e copiando il link da lì (se necessario, rimuovendo ogni parametro relativo alla grandezza dell'immagine alla fine, e cambiando l'estensione in `.webp`).
 
 ### Aggiungere file da scansionare
 
-Usa **Aggiungi file audio...** in fondo alla finestra per aggiungere le canzoni che vuoi cercare, scegliendo singoli file oppure un'intera cartella. WerZatSonGUI accetta file `.mp3`, `.wav`, `.flac` e `.m4a`: qualsiasi cosa non sia già un `.mp3` viene **automaticamente convertita** nel formato mp3 VBR della massima qualità che FFmpeg può produrre non appena inizia una scansione.
+Usa **Aggiungi file audio...** in fondo alla finestra per aggiungere le canzoni che vuoi cercare, scegliendo singoli file oppure un'intera cartella. WerZatSonGUI accetta file `.mp3`, `.wav`, `.flac` e `.m4a`. Qualsiasi cosa non sia già un `.mp3` viene **automaticamente convertita** nel formato mp3 VBR della massima qualità che FFmpeg può produrre non appena inizia una scansione.
 
 > **ATTENZIONE: Questa conversione RIMPIAZZA il file originale.** 
-> Una volta che un `.wav`/`.flac`/`.m4a` viene convertito, nella tua cartella di input rimane solo l'`.mp3` risultante; tieni prima una copia altrove se vuoi conservare il file originale codificato senza perdita (o comunque con una codifica diversa). La conversione è a prova di crash (un'esecuzione interrotta non ti lascia mai con un file mezzo convertito o mancante, semplicemente riprova in modo pulito la volta successiva), ma è unidirezionale.
+> Una volta che un `.wav`/`.flac`/`.m4a` viene convertito, nella tua cartella di input rimane solo l'`.mp3` risultante. Tieni prima una copia altrove se vuoi conservare il file originale codificato senza perdita (o comunque con una codifica diversa). La conversione è a prova di crash (un'esecuzione interrotta non ti lascia mai con un file mezzo convertito o mancante, semplicemente riprova in modo pulito la volta successiva), ma è unidirezionale.
 
 ## Modalità di ricerca spiegate
 
@@ -350,9 +397,10 @@ Usa **Aggiungi file audio...** in fondo alla finestra per aggiungere le canzoni 
 - La **modalità Veloce** (quella predefinita) cerca ogni file in attesa esattamente così com'è, senza generare variazioni.
 - La **modalità Lunga** genera in aggiunta variazioni a velocità/tonalità alternative di ogni file (vedi la **scheda Modalità lunga** sopra), per poi cercare anche ogni variazione. Molto più approfondita, ma logicamente molto più lenta, dato che sta di fatto scansionando decine di file extra per ogni canzone.
 
-In entrambi i casi, WerZatSonGUI non passa mai l'intero elenco di file al motore sottostante tutto in una volta: WerZatSong stesso ha un **limite massimo di 30 file per ricerca**, quindi tutto viene prima suddiviso in gruppi. I gruppi puntano normalmente a **20 file** (o, in modalità Lunga, 20 variazioni) alla volta, dato che questo lascia comodamente margine per crescere se un gruppo ha bisogno di assorbire qualche file/variazione in più senza mai avvicinarsi al limite massimo di 30 file.
+In entrambi i casi, WerZatSonGUI non passa mai l'intero elenco di file al motore sottostante tutto in una volta: WerZatSong ha un **limite massimo di 30 file per ricerca**, quindi tutto viene prima suddiviso in gruppi. I gruppi sono normalmente proprio di **30 file** (o, in modalità Lunga, 30 variazioni) alla volta.
 
-In modalità Veloce è semplice: 45 file in attesa diventano una suddivisione 20/20/5. In modalità Lunga è un pelino più intelligente, perché il *numero di variazioni per file* non è fisso e raramente si divide in modo esatto per 20: invece di inviare un gruppo di 20 seguito da un minuscolo gruppo residuo di, ad esempio, 3 variazioni, WerZatSonGUI mantiene una riserva comune di variazioni non ancora cercate tra i vari file, e finalizza la dimensione di un gruppo solo quando sa davvero quanto resta da cercare. In concreto: se il file A produce 23 variazioni, le prime 20 vengono inviate non appena pronte, e le restanti 3 vengono trattenute e unite alle prime 17 variazioni generate per il file B, formando un secondo gruppo completo di 20. Così via per tutti i file necessari, invece di inviare mai un gruppo residuo sprecato e quasi vuoto. Il limite massimo di 30 file viene comunque sempre rispettato; un gruppo cresce oltre i 20 solo quando questo evita un piccolo gruppo residuo e rimane comunque sotto i 30.
+In modalità Veloce è semplice: 45 file in attesa si suddividono in 30/15.
+In modalità Lunga è un pelino più intelligente, perché il *numero di variazioni per file* non è fisso e raramente si divide in modo esatto per 30: invece di usare un gruppo di 30 seguito da un minuscolo gruppo residuo di, ad esempio, 3 variazioni, WerZatSonGUI mantiene una riserva comune di variazioni non ancora cercate tra i vari file, e finalizza la dimensione di un gruppo solo quando sa davvero quanto resta da cercare. Più concretamente: se per il file A si producono 33 variazioni, le prime 30 vengono usate non appena pronte, e le restanti 3 vengono trattenute e unite alle prime 27 variazioni generate per il file B, formando un secondo gruppo completo di 30. Così via per tutti i file necessari, invece di utilizzare mai un gruppo residuo sprecato e quasi vuoto. Il limite massimo di 30 file viene comunque sempre rispettato tecnicamente all'interno del programma, ma per fortuna non c'è più bisogno di preoccuparsene.
 
 ## File processati e PROCESSED.txt
 
@@ -391,23 +439,10 @@ La stessa legenda e formattazione sono usate sia nel file di log `.txt` sia nel 
 
 ## Aggiungere una lingua / Traduzioni
 
-WerZatSonGUI attualmente è disponibile in **Italiano** e **Inglese**, semplicemente perché sono le lingue che al momento possono essere scritte e verificate correttamente, non un limite fisso a quello che può supportare. Se vuoi tradurlo in un'altra lingua, guardati [**TRANSLATION_GUIDE.md**](TRANSLATION_GUIDE.md) (in inglese) per una guida completa a ogni file coinvolto, poi contatta me (lo sviluppatore) in modo da poter aggiungere ufficialmente la tua traduzione al repository e farla usare a tutti.
-
-## Avvisi di SmartScreen / Antivirus
-
-Dato che `WerZatSonGUI_Installer.exe`, `setup_deps.ps1` e `WerZatSonGUI.pyw` non sono firmati con un certificato di firma del codice a pagamento (che mi costerebbe una fortuna, che non ho modo di spendere), SmartScreen di Windows e alcuni motori antivirus potrebbero segnalarli come provenienti da un "Editore sconosciuto" o persino metterli in quarantena. Questa è un'euristica di fiducia/reputazione basata su quanto un file sia nuovo e diffuso, **non** un'indicazione che ci sia effettivamente qualcosa di dannoso. È un effetto collaterale ben noto dei software Windows distribuiti in modo indipendente in generale, e i certificati di firma del codice non sono qualcosa che un progetto hobbistico gratuito/open source può normalmente ottenere, quindi ci si aspetta che questo avviso continui a comparire indipendentemente da qualsiasi modifica apportata agli script stessi.
-
-Se vedi una finestra **"Windows ha protetto il tuo PC"** dopo aver scaricato `WerZatSonGUI_Installer.exe`:
-
-1. Clicca su **Ulteriori informazioni**
-2. Clicca sul pulsante **Esegui comunque** che appare
-
-Se il tuo antivirus mette in quarantena o elimina `setup.iss`, `setup_deps.ps1`, `upgrade_to_GUI.bat` o `WerZatSonGUI.pyw` invece di limitarsi ad avvisarti, ripristina il file dalla quarantena (o riscarica/riestrai di nuovo l'archivio) e aggiungi un'esclusione per la cartella di WerZatSonGUI se il tuo antivirus te lo permette.
-
-Se preferisci evitare del tutto il programma di installazione segnalato, e hai già un'installazione funzionante di WerZatSong o WerZatSonGUI, vedi [*Consigliato (se hai già WerZatSong o una vecchia versione di WerZatSonGUI installata): upgrade_to_GUI.zip*](#Consigliato-(se-hai-già-WerZatSong-o-una-vecchia-versione-di-WerZatSonGUI-installata):-upgrade_to_GUI.zip) più sopra. `upgrade_to_GUI.bat` riutilizza la tua installazione esistente di Node.js/Python/Rust/C++ Build Tools/FFmpeg e non ha mai bisogno di toccare WinGet o i programmi di installazione guidati di Visual Studio/Rust.
+WerZatSonGUI attualmente è disponibile in **italiano**, **inglese**, **francese** e **portoghese**. Se vuoi tradurlo in un'altra lingua, guardati [**TRANSLATION_GUIDE.md**](../TRANSLATION_GUIDE.md) (in inglese) per una guida completa a ogni file coinvolto, poi contatta lo sviluppatore in modo da poter aggiungere ufficialmente la tua traduzione al repository e farla usare a tutti.
 
 ## Crediti
 
-- **WerZatSonGUI v1.3.1** di some random account con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.
-- **Script per provare in blocco canzoni su WerZatSong** di some random account con logica per la generazione di file a velocità alternative di Mystic65.
-- **WerZatSong** di Nel con contributi da Numerophobe, AzureBlast e Mystic65.
+- **WerZatSonGUI v1.4.0** di some random account, con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.
+- **Script per provare in blocco canzoni su WerZatSong** di some random account, con logica per la generazione di file a velocità alternative di Mystic65.
+- **WerZatSong** di Nel, con contributi da Numerophobe, AzureBlast e Mystic65.

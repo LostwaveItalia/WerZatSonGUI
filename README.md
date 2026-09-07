@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 1.3.1](https://img.shields.io/badge/Version-1.3.1-orange)
+![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-orange)
 
 ![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
@@ -9,7 +9,11 @@
 **WerZatSonGUI** is a Windows x64 desktop app that puts a full graphical interface on top of [**WerZatSong**](https://github.com/Nel80s/WerZatSong), the original command line song finder tool. If you've used WerZatSong before, this app functions in essentially the same way, you just don't need to manually open a terminal and type commands to use it anymore. Check [*🌟 Features*](#-features) for more info.
 
 This document explains how to install WerZatSonGUI, set it up for the first time, and use every part of its interface.
-> **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](README_ITA.md).
+> **Per chi parla italiano**: una traduzione completa di questo documento è disponibile in [**README_ITA.md**](translated_READMEs/README_ITA.md).
+
+> **Pour les francophones** : une traduction intégrale de ce document est disponible dans [**README_FRA.md**](translated_READMEs/README_FRA.md).
+
+> **Para quem fala português**: uma tradução completa deste documento está disponível em [**README_POR.md**](translated_READMEs/README_POR.md).
 
 ## Table of Contents
 
@@ -55,7 +59,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 1. **Download** and run `WerZatSonGUI_Installer.exe`.
 
 2. **Launch** the installer and follow the instructions; the wizard will make you install **Visual Studio Build Tools** and **Rust,** and take care of other dependencies automatically.
-> Make sure to select the **"Desktop development with C++ workload** when installing the Visual Studio Build Tools. If you already have Visual Studio, **edit** your "Visual Studio Build Tools 2026" installation to add that option.
+> Make sure to select the **"Desktop development with C++ workload** when installing the Visual Studio Build Tools. If you already have Visual Studio, **find** and **edit** your latest "Visual Studio Build Tools" installation (V.S.B.T. 2026, as of 2026) to add that option.
 
 
 3. (If your PC restarts) **Re-launch** the installer to finish installing dependencies.
@@ -83,11 +87,11 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 
 ## 🌟 Features
 - Every [**WerZatSong**](https://github.com/Nel80s/WerZatSong) command is supported: all 4 search modes (**MusicBrainz (AcoustID), AudioTag, Shazam** and **Audfprint**) are here, and any number of them can be combined in a single scan.
-- Support for entire **Song Databases** thanks to a **batch-scanning engine,** which lets you add as many audio files as you want to the program: it will automatically scan at most 20-30 at a time, as efficiently as possible (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below). Links to the community-ran [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy) and [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) Song Databases are included in the program under the **Add Audio Files...** section.
+- Support for entire **Song Databases** thanks to a **batch-scanning engine,** which lets you add as many audio files as you want to the program: it will automatically scan at most 20-30 at a time, as efficiently as possible (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below). Links to the community-ran [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) and [@user-QLostwave (Q)](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) Song Databases are included in the program under the **Add Audio Files...** section.
 - A built-in script by **Mystic65**, which can automatically generate and search dozens of **tempo/pitch-shifted variations** of each file, to help catch songs that were sped up, slowed down, or pitched differently (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below).
 - A **base WerZatSong rework** and a **logs rework** (see [*Log Format*](#log-format) below) by **EierkuchenHD.**
 - A new **Processed files...** section. If you have a significant amount of songs in your input folder, you can now easily decide which ones you want to run with WerZatSonGUI, **without** having to move anything out of that folder (see [*Processed Files & PROCESSED.txt*](#processed-files--processedtxt) below).
-- Support for **multiple languages** and **translations.** Currently, the supported languages are English and Italian (see [*Adding a Language / Translations*](#adding-a-language--translations) below).
+- Support for **multiple languages** and **translations.** Currently, the supported languages are English, Italian, French and Portuguese (see [*Adding a Language / Translations*](#adding-a-language--translations) below).
 - Support for **light** and **dark** modes.
 
 ## Requirements
@@ -120,9 +124,9 @@ Before your first scan, you'll also want:
 2. If your Windows install is set to a language other than English or one of the other supported languages, the installer will ask you to pick one of them for the wizard itself; the app's own interface language is then automatically set to match afterwards (you can always change it later in **Advanced Settings**, see [*General tab*](#general-tab) below)
 3. On the next page, you can choose whether to create a **desktop shortcut** (checked by default) alongside the usual Start Menu entry
 4. The installer will automatically:
-   - Install Node.js, Python 3.13 and FFmpeg if they're not already on your system, or upgrade them if an existing copy is below the required minimum version (via WinGet)
    - Detect an existing Visual Studio C++ Build Tools install (2017 or newer) and Rust install, and skip them if already present
    - If either is missing, open the correct official download page for your version of Windows and pause, asking you to finish that install yourself before continuing (see *"Why some installs aren't fully automatic"* below) **Once either of the two installations has finished, you will have to go to the PowerShell screen opened for the installation and press ENTER manually to continue.**
+   - Install Node.js, Python 3.13 and FFmpeg if they're not already on your system, or upgrade them if an existing copy is below the required minimum version (via WinGet)
    - Run `npm install`
    - Run `pip install -r requirements.txt`
    - Install pip and all the required Python packages
@@ -244,6 +248,7 @@ If a step of the automatic installer fails, you can install everything by hand i
 	setup_deps.ps1
 	Languages folder
 	output folder
+    _upgrade_script folder
 	```
 
 5. **Launch WerZatSonGUI** by double-clicking `WerZatSonGUI.pyw` (or running `pythonw WerZatSonGUI.pyw` from a terminal in that folder)
@@ -355,7 +360,7 @@ Split into five tabs so related settings are grouped together. Each individual s
 
 - **Mark all audio files as processed in:** Useful if you have a lot of files in your input folder, and you want to run only a few specific ones. Marks all audio files in your input folder as **processed** in either **Quick** mode (no additional tempo generation), **Long** mode (original files and additional tempos) or **both** modes, so you can manually delete the lines of the songs you do not want to run by editing **PROCESSED.txt.** Pressing any of the 3 buttons **overwrites** your current PROCESSED.txt file (see [*Processed Files & PROCESSED.txt*](#processed-files--processedtxt) below).
 - **Theme:** Changes the visual appearance of the application. Set to **Light,** **Dark,** or **System Default** to automatically match your OS settings.
-- **Language:** Switches the interface between **English** and **Italiano**. Takes effect immediately, no restart required (see [*Adding a Language / Translations*](#adding-a-language--translations) below if you'd like to help add more).
+- **Language:** Switches the interface between **English** and another supported language. Takes effect immediately, no restart required (see [*Adding a Language / Translations*](#adding-a-language--translations) below if you'd like to help add more).
 
 #### Long Mode tab
 
@@ -376,7 +381,7 @@ Split into five tabs so related settings are grouped together. Each individual s
 #### Discord tab
 
 - **Use a custom Webhook name:** overrides the display name your Discord webhook uses when posting, instead of the default "WerZatSong".
-- **Use a custom Webhook image:** overrides the avatar image your Discord webhook uses when posting. The link must start with either `https://cdn.discordapp.com/icons/` or `https://cdn.discordapp.com/avatars/`, or Discord won't recognize it. You can get a correctly formatted link by setting the image as a Discord bot's profile picture and copying the link from there.
+- **Use a custom Webhook image:** overrides the avatar image your Discord webhook uses when posting. The link must start with either `https://cdn.discordapp.com/icons/`, `https://cdn.discordapp.com/app-icons/` or `https://cdn.discordapp.com/avatars/`, or Discord won't recognize it. The image must be in `.webp` format. You can get a correctly formatted link by setting the image as a Discord bot's profile picture and copying the link from there (if necessary, removing any size parameter at the end and changing the extension to `.webp`).
 
 ### Adding Files to Scan
 
@@ -397,9 +402,10 @@ Use **Add Audio Files...** at the bottom of the window to add the songs you want
 - **Quick Mode** (the default) searches every pending file exactly as-is, no variations generated.
 - **Long Mode** additionally generates tempo/pitch-shifted variations of each file first (see the **Long Mode tab** above), then searches every variation too. Much more thorough, but much slower, since it's effectively scanning dozens of extra files per song.
 
-Either way, WerZatSonGUI never hands the whole file list to the underlying engine at once: WerZatSong itself has a **hard limit of 30 files per search**, so everything is split into batches beforehand. Batches normally target **20 files** (or, in Long Mode, 20 variations) at a time, since that comfortably leaves room to grow if a batch needs to absorb a few extra files/variations without ever approaching the hard 30-file limit.
+Either way, WerZatSonGUI never hands the whole file list to the underlying engine at once: WerZatSong itself has a **hard limit of 30 files per search**, so everything is split into batches beforehand. Batches normally are of that same number, **30 files** (or, in Long Mode, 30 variations) at a time.
 
-In Quick Mode this is straightforward: 45 pending files becomes a 20/20/5 split. In Long Mode it's a little smarter, because the *number of variations per file* isn't fixed and rarely divides evenly by 20: rather than dispatching a batch of 20 followed by a tiny batch of, say, 3 leftover variations, WerZatSonGUI keeps a running pool of not-yet-searched variations across files and only finalizes a batch's size once it knows how much is actually left to search. Concretely: if file A produces 23 variations, the first 20 are dispatched as soon as they're ready, and the remaining 3 are held and combined with the first 17 variations generated for file B into a second, full batch of 20. And so on for as many files as needed, rather than ever sending out a wasteful near-empty batch. The 30-file hard limit is still always respected; a batch only ever grows past 20 when doing so avoids a small trailing batch and still fits under 30.
+In Quick Mode this is straightforward: 45 pending files becomes a 30/15 split.
+In Long Mode it's a little smarter, because the *number of variations per file* isn't fixed and rarely divides evenly by 30: rather than dispatching a batch of 30 followed by a tiny batch of, say, 3 leftover variations, WerZatSonGUI keeps a running pool of not-yet-searched variations across files and only finalizes a batch's size once it knows how much is actually left to search. Concretely: if file A produces 33 variations, the first 30 are dispatched as soon as they're ready, and the remaining 3 are held and combined with the first 27 variations generated for file B into a second, full batch of 30. And so on for as many files as needed, rather than ever sending out a wasteful near-empty batch. The 30-file hard limit is still always technically internally respected by the program's logic, but you don't have to worry about it anymore.
 
 ## Processed Files & PROCESSED.txt
 
@@ -438,10 +444,10 @@ The same legend and formatting is used both in the `.txt` log file and in the re
 
 ## Adding a Language / Translations
 
-WerZatSonGUI currently ships with **English** and **Italian**, simply because those are the languages that can currently be written and double-checked properly, not a hard limit on what it'll ever support. If you'd like to translate it into another language, see [**TRANSLATION_GUIDE.md**](TRANSLATION_GUIDE.md) for a full walkthrough of every file involved, then get in touch so your translation can be added to the repo officially and everyone can use it.
+WerZatSonGUI currently ships with **English**, **Italian**, **French** and **Portuguese**. If you'd like to translate it into another language, see [**TRANSLATION_GUIDE.md**](TRANSLATION_GUIDE.md) for a full walkthrough of every file involved, then get in touch so your translation can be added to the repo officially and everyone can use it.
 
 ## Credits
 
-- **WerZatSonGUI v1.3.1** by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.
+- **WerZatSonGUI v1.4.0** by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.

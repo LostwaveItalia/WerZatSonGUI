@@ -1,0 +1,11 @@
+docopt
+joblib
+numpy
+psutil
+scipy
+sv_ttk
+darkdetect
+pywinstyles
+yt-dlp
+audioop-lts; python_version >= '3.13'
+shazamio

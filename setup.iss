@@ -1,12 +1,12 @@
 [Setup]
 ; Basic Installer Configuration
 AppName=WerZatSonGUI
-AppVersion=1.3.1
+AppVersion=1.4.0
 AppPublisher=LostwaveItalia
 AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI
 AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI/issues
 AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI/releases
-VersionInfoVersion=1.3.1.0
+VersionInfoVersion=1.4.0.0
 VersionInfoCompany=WerZatSonGUI
 VersionInfoDescription=WerZatSonGUI Installer
 VersionInfoCopyright=WerZatSonGUI
@@ -28,25 +28,45 @@ WizardSmallImageFile=assets\logo.png
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "italian"; MessagesFile: "Languages\Italian.isl"
+Name: "french"; MessagesFile: "Languages\French.isl"
+Name: "portuguese"; MessagesFile: "Languages\BrazilianPortuguese.isl"
 
 [CustomMessages]
 english.DesktopIconDesc=Create a desktop shortcut
-italian.DesktopIconDesc=Crea un collegamento sul desktop
 english.AdditionalShortcuts=Additional shortcuts:
-italian.AdditionalShortcuts=Collegamenti aggiuntivi:
 english.InstallingDepsStatus=Installing dependencies (Node.js, Python, FFmpeg, Rust, C++ Tools)... you may be asked to confirm a couple of installs
-italian.InstallingDepsStatus=Installazione delle dipendenze (Node.js, Python, FFmpeg, Rust, strumenti per C++)... potrebbe venirti chiesto di confermare un paio di installazioni
 english.LaunchAppDesc=Launch Application Now
-italian.LaunchAppDesc=Avvia l'applicazione ora
-
 english.InstallModeTitle=Installation Mode
-italian.InstallModeTitle=Modalità di installazione
 english.InstallModeDesc=Please choose how you want to install WerZatSonGUI.
-italian.InstallModeDesc=Scegli come desideri installare WerZatSonGUI.
 english.InstallModeAll=Install for all users
-italian.InstallModeAll=Installa per tutti gli utenti
 english.InstallModeUser=Install just for me
+
+italian.DesktopIconDesc=Crea un collegamento sul desktop
+italian.AdditionalShortcuts=Collegamenti aggiuntivi:
+italian.InstallingDepsStatus=Installazione delle dipendenze (Node.js, Python, FFmpeg, Rust, strumenti per C++)... potrebbe venirti chiesto di confermare un paio di installazioni
+italian.LaunchAppDesc=Avvia l'applicazione ora
+italian.InstallModeTitle=Modalità di installazione
+italian.InstallModeDesc=Scegli per chi desideri installare WerZatSonGUI.
+italian.InstallModeAll=Installa per tutti gli utenti
 italian.InstallModeUser=Installa solo per me
+
+french.DesktopIconDesc=Créer un raccourci sur le bureau
+french.AdditionalShortcuts=Raccourcis supplémentaires:
+french.InstallingDepsStatus=Installation des dépendances (Node.js, Python, FFmpeg, Rust, outils C++)... il se peut qu'on vous demande de confirmer certaines installations
+french.LaunchAppDesc=Lancer l'application maintenant
+french.InstallModeTitle=Mode d'installation
+french.InstallModeDesc=Veuillez choisir pour qui vous souhaitez installer WerZatSonGUI.
+french.InstallModeAll=Installer pour tous les utilisateurs
+french.InstallModeUser=Installer uniquement pour moi
+
+portuguese.DesktopIconDesc=Criar um atalho na área de trabalho
+portuguese.AdditionalShortcuts=Atalhos adicionais:
+portuguese.InstallingDepsStatus=Instalando dependências (Node.js, Python, FFmpeg, Rust, ferramentas C++)... pode ser necessário confirmar algumas instalações
+portuguese.LaunchAppDesc=Iniciar o aplicativo agora
+portuguese.InstallModeTitle=Modo de instalação
+portuguese.InstallModeDesc=Escolha para quem deseja instalar o WerZatSonGUI.
+portuguese.InstallModeAll=Instalar para todos os usuários
+portuguese.InstallModeUser=Instalar apenas para mim
 
 [Files]
 ; Helper files for installing dependencies
@@ -118,6 +138,46 @@ begin
       ConfigContentAnsi := AnsiString(ConfigContentStr);
       
       // 5. Save the updated file
+      SaveStringToFile(ConfigPath, ConfigContentAnsi, False);
+    end;
+  end;
+  if (CurStep = ssPostInstall) and (ActiveLanguage = 'french') then
+  begin
+    ConfigPath := ExpandConstant('{app}\config.json');
+    
+    
+    if LoadStringFromFile(ConfigPath, ConfigContentAnsi) then
+    begin
+    
+      ConfigContentStr := string(ConfigContentAnsi);
+      
+      
+      StringChangeEx(ConfigContentStr, '"language": "English"', '"language": "Français"', False);
+      
+      
+      ConfigContentAnsi := AnsiString(ConfigContentStr);
+      
+      
+      SaveStringToFile(ConfigPath, ConfigContentAnsi, False);
+    end;
+  end;
+  if (CurStep = ssPostInstall) and (ActiveLanguage = 'portuguese') then
+  begin
+    ConfigPath := ExpandConstant('{app}\config.json');
+    
+    
+    if LoadStringFromFile(ConfigPath, ConfigContentAnsi) then
+    begin
+    
+      ConfigContentStr := string(ConfigContentAnsi);
+      
+      
+      StringChangeEx(ConfigContentStr, '"language": "English"', '"language": "Português"', False);
+      
+      
+      ConfigContentAnsi := AnsiString(ConfigContentStr);
+      
+      
       SaveStringToFile(ConfigPath, ConfigContentAnsi, False);
     end;
   end;
