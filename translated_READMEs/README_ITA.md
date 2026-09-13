@@ -1,6 +1,6 @@
 # WerZatSonGUI
 ![Piattaforma: Windows x64](https://img.shields.io/badge/Piattaforma-Windows%20x64-blue)
-![Versione: 1.4.0](https://img.shields.io/badge/Versione-1.4.0-orange)
+![Versione: 2.0.0](https://img.shields.io/badge/Versione-2.0.0-orange)
 
 ![WerZatSonGUI durante una scansione in modalità scura](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI durante una scansione in modalità chiara](../assets/images/gui_screenshot_2.png)
@@ -30,7 +30,7 @@ Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvi
 - [Usare WerZatSonGUI](#usare-werzatsongui)
 - [Modalità di ricerca spiegate](#modalit%C3%A0-di-ricerca-spiegate)
 - [Avviare una scansione: modalità veloce contro modalità lunga](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga)
-- [File processati e PROCESSED.txt](#file-processati-e-processedtxt)
+- [Canzoni processate e finestre di selezione](#canzoni-processate-e-finestre-di-selezione)
 - [Dove trovare i risultati](#dove-trovare-i-risultati)
 - [Formato dei log](#formato-dei-log)
 
@@ -86,7 +86,11 @@ Questo documento spiega come installare WerZatSonGUI, configurarlo al primo avvi
 - Supporto per interi **Database di canzoni** grazie a un **motore di scansione in blocco**, che ti permette di aggiungere tutti i file audio che vuoi al programma: li scansionerà automaticamente al massimo 20-30 alla volta, nel modo più efficiente possibile (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto). I link ai Database di canzoni gestiti dalla community di [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), del server [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) e del [canale di @user-QLostwave (Q) su Youtube](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) sono inclusi nel programma sotto alla sezione **Aggiungi file audio...**.
 - Uno script integrato di **Mystic65**, che può generare e cercare automaticamente decine di **variazioni di tempo/tonalità** per ogni file, per aiutare a trovare canzoni che sono state velocizzate, rallentate o con tonalità alterata (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto).
 - Una **revisione di WerZatSong base** e dei **log più leggibili** (vedi [*Formato dei log*](#formato-dei-log) più sotto) grazie ad **EierkuchenHD.**
-- Una nuova sezione **File processati...**. Se hai una quantità importante di canzoni nella cartella di input, ora puoi decidere facilmente quali eseguire con WerZatSonGUI, **senza** dover spostare nulla fuori da quella cartella (vedi [*File processati e PROCESSED.txt*](#file-processati-e-processedtxt) più sotto).
+- Due file JSON di **canzoni processate** (uno per modalità di scansione) sostituiscono il vecchio `PROCESSED.txt` unico. Se hai una quantità importante di canzoni nella cartella di input, ora puoi decidere facilmente quali eseguire con WerZatSonGUI tramite la finestra **Seleziona canzoni...**, **senza** dover modificare un file di testo a mano o spostare nulla fuori da quella cartella (vedi [*Canzoni processate e finestre di selezione*](#canzoni-processate-e-finestre-di-selezione) più sotto).
+- Un selettore **Modalità di scansione** (**Solo veloce**, **Solo lunga**, **Entrambe**) che decide quali modalità vengono eseguite nella sessione corrente, al posto della vecchia casella "genera tempi diversi", con l'opzione di una scansione completa con un solo clic (vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto).
+- Una finestra **Seleziona canzoni...**: un albero della tua cartella di input con una casella Veloce/Lunga per ogni canzone, che ti permette di pianificare esattamente quali canzoni sono candidate per ciascuna modalità.
+- Una finestra **Seleziona cartelle PKLZ...**: un albero delle sottocartelle del tuo database Audfprint, che ti permette di restringere una scansione a specifiche collezioni di fingerprint invece di cercare sempre nell'intero database. Usare più di una sottocartella fa sì che la modalità Lunga rigeneri le sue variazioni una volta per sottocartella, cosa di cui la console ti avvisa.
+- Una scelta **Copia / Sposta** dentro le finestre **Aggiungi file PKLZ...** e **Aggiungi file audio...**. Sposta (l'opzione predefinita) elimina i file sorgente dopo averli copiati con successo; Copia li lascia dove sono.
 - Supporto per **più lingue** e **traduzioni.** Attualmente le lingue supportate sono italiano, inglese, francese e portoghese (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto).
 - Supporto per modalità **chiara** e **scura**.
 
@@ -316,7 +320,7 @@ Se preferisci evitare del tutto il programma di installazione segnalato, e hai g
 
 ## Usare WerZatSonGUI
 
-Una volta completata la configurazione, WerZatSonGUI apre la sua interfaccia completa ogni volta che lo avvii. Sia in modalità a finestra che a schermo intero/massimizzata, la barra delle azioni in alto (**Aggiungi file PKLZ...**, **Aggiungi file audio...**, **File processati...**, **Arresto forzato**, **Avvia WerZatSong**) resta sempre visibile e raggiungibile. Se il resto dell'interfaccia non entra nello spazio disponibile (per esempio con sia **Chiavi API e Webhook** che **Cartelle predefinite** espanse su uno schermo più piccolo), la sezione sopra la barra delle azioni scorre invece di spingerla fuori dallo schermo.
+Una volta completata la configurazione, WerZatSonGUI apre la sua interfaccia completa ogni volta che lo avvii. Sia in modalità a finestra che a schermo intero/massimizzata, la barra delle azioni in alto (**Aggiungi file PKLZ...**, **Aggiungi file audio...**, **Apri cartella file processati...**, **Arresto forzato**, **Avvia WerZatSong**) resta sempre visibile e raggiungibile. Se il resto dell'interfaccia non entra nello spazio disponibile (per esempio con sia **Chiavi API e Webhook** che **Cartelle predefinite** espanse su uno schermo più piccolo), la sezione sopra la barra delle azioni scorre invece di spingerla fuori dallo schermo.
 
 ### Intestazione
 
@@ -349,22 +353,25 @@ Quattro caselle di spunta per abilitare o disabilitare **MusicBrainz (AcoustID)*
 
 ### Impostazioni avanzate
 
-Suddivise in cinque schede in modo che le impostazioni correlate siano raggruppate insieme. Ogni singola impostazione ha un piccolo pulsante **[?]** alla sua sinistra con una breve spiegazione, e questa sezione ne riassume anche il funzionamento. L'intero pannello appare in grigio mentre è in corso una scansione.
+Suddivise in otto schede in modo che le impostazioni correlate siano raggruppate insieme. Ogni singola impostazione ha un piccolo pulsante **[?]** alla sua sinistra con una breve spiegazione, e questa sezione ne riassume anche il funzionamento. L'intero pannello appare in grigio mentre è in corso una scansione.
 
 #### Scheda Generali
 
-- **Segna tutti i file audio come processati in:** utile se hai molti file nella tua cartella di input, e vuoi eseguirne solo alcuni specifici. Segna tutti i file audio nella tua cartella di input come **processati** in modalità **Veloce** (senza generazione di variazioni di velocità aggiuntive), modalità **Lunga** (file originali e variazioni aggiuntive) oppure **entrambe** le modalità, in modo da poter eliminare manualmente le righe delle canzoni che non vuoi eseguire modificando **PROCESSED.txt.** Premere uno qualsiasi dei 3 pulsanti **sovrascrive** il tuo file PROCESSED.txt attuale (vedi [*File processati e PROCESSED.txt*](#file-processati-e-processedtxt) più sotto).
+- **Modalità di scansione:** un selettore a tre opzioni, **Solo veloce**, **Solo lunga** oppure **Entrambe**, che decide quali modalità di ricerca vengono effettivamente eseguite nella sessione corrente. Vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto per cosa fa ciascuna opzione.
+- **Seleziona canzoni...** e **Seleziona cartelle PKLZ...:** si trovano fianco a fianco sopra la riga Modalità di scansione, condividendo un unico pulsante **[?]** alla loro sinistra. Cliccandolo si apre un piccolo selettore che permette di scegliere quale delle due spiegazioni leggere. **Seleziona canzoni...** apre una finestra che elenca ogni canzone nella tua Cartella di input con una casella Veloce/Lunga ciascuna, al posto della vecchia funzione "Segna tutti i file audio come processati in". **Seleziona cartelle PKLZ...** apre una finestra che elenca le sottocartelle della tua cartella del database Audfprint, permettendoti di restringere le ricerche Audfprint a specifiche sottocartelle invece di cercare sempre nell'intero database (la sua spiegazione copre i compromessi nello scegliere più di una sottocartella). Vedi [*Canzoni processate e finestre di selezione*](#canzoni-processate-e-finestre-di-selezione) più sotto per entrambe.
 - **Tema:** cambia l'aspetto visivo dell'applicazione. Impostalo su **Chiaro,** **Scuro,** o **Predefinito di sistema** per adattarlo automaticamente alle impostazioni del tuo sistema operativo.
 - **Lingua:** cambia l'interfaccia da **italiano** ad un'altra lingua supportata e viceversa. Ha effetto immediato, senza bisogno di riavviare (vedi [*Aggiungere una lingua / Traduzioni*](#aggiungere-una-lingua--traduzioni) più sotto se vuoi aiutare ad aggiungerne altre).
 
 #### Scheda Modalità lunga
 
-- **Abilita la modalità lunga (generazione di diverse velocità per ogni file audio):** passa le scansioni tra modalità **Veloce** e **Lunga**. Vedi [*Avviare una scansione: modalità veloce contro modalità lunga*](#avviare-una-scansione-modalit%C3%A0-veloce-contro-modalit%C3%A0-lunga) più sotto.
+Se la modalità Lunga viene eseguita o meno in questa sessione è ora deciso dal selettore **Modalità di scansione** sulla **scheda Generali** sopra, non da una casella su questa scheda.
+
 - **Lista dei moltiplicatori di velocità negativi** / **Lista dei moltiplicatori di velocità positivi:** i rapporti di velocità usati per generare variazioni in modalità Lunga (negativi = rallentati/tonalità più bassa, sotto `1.0`; positivi = velocizzati/tonalità più alta, sopra `1.0`). Modificali come lista di valori separati da virgola tra parentesi quadre, es. `[0.9, 0.95, 1.05, 1.1]`. Lasciando **un solo** campo vuoto (o `[]`) WerZatSonGUI genererà variazioni solo dall'altro array; lasciandoli **entrambi** vuoti verrà ripristinato l'intero set predefinito di 40 variazioni (20 negative + 20 positive).
 
 #### Scheda Audfprint
 
-- **Usa solo i fingerprint di questa sottocartella:** restringe la modalità Audfprint a una singola sottocartella della tua cartella del database Audfprint invece di cercare in tutte. Usa **Scegli...** per selezionarne una, oppure scrivi direttamente il suo nome (deve già esistere all'interno della cartella del database Audfprint).
+Scegliere sottocartelle PKLZ specifiche ora si fa tramite il pulsante **Seleziona cartelle PKLZ...** sulla **scheda Generali**, non su questa scheda; il popup **[?]** accanto ad esso spiega i compromessi nello scegliere più di una sottocartella.
+
 - **Numero di thread della CPU utilizzati:** stabilisce quanti thread della CPU usa la modalità Audfprint. WerZatSong stesso limita questo valore a **16** indipendentemente da cosa inserisci, per aiutare a evitare di esaurire la memoria; lasciando questo deselezionato, Audfprint userà automaticamente tutti i thread disponibili sulla tua macchina.
 - **Profondità della ricerca:** controlla quanto approfonditamente Audfprint cerca una corrispondenza, da `1` a `8`. Valori più alti eseguono una "ricerca approfondita" più accurata per le clip di bassa qualità, ma possono aumentare significativamente i tempi di elaborazione. Il valore predefinito è `4`.
 
@@ -378,12 +385,31 @@ Suddivise in cinque schede in modo che le impostazioni correlate siano raggruppa
 - **Usa un nome personalizzato per il Webhook:** sostituisce il nome visualizzato con cui il tuo webhook di Discord pubblica i messaggi, al posto del "WerZatSong" predefinito.
 - **Usa un'immagine personalizzata per il Webhook:** sostituisce l'immagine dell'avatar con cui il tuo webhook di Discord pubblica i messaggi. Il link deve iniziare con `https://cdn.discordapp.com/icons/` oppure `https://cdn.discordapp.com/avatars/`, altrimenti Discord non lo riconoscerà. L'immagine dovrà essere in formato `.webp`. Puoi ottenere un link formattato correttamente impostando l'immagine come immagine del profilo di un bot su Discord e copiando il link da lì (se necessario, rimuovendo ogni parametro relativo alla grandezza dell'immagine alla fine, e cambiando l'estensione in `.webp`).
 
+#### Scheda Conteggi hash
+
+- **Cartella dei conteggi hash dei file .pklz:** La cartella in cui vengono salvati i conteggi hash (viene creata automaticamente se non esiste). I conteggi hash sono i file in testo semplice generati per ogni .pklz aggiunto al database quando **Crea conteggi hash per ogni file .pklz aggiunto** è abilitato: mostrano ogni file audio contenuto in un .pklz e quanti hash ha contribuito ciascuno. Usa **Scegli...** per selezionare una cartella o digita direttamente il percorso. Se il campo viene lasciato vuoto, torna alla cartella predefinita `hash_tables` accanto all'applicazione.
+- **Crea conteggi hash per ogni file .pklz aggiunto:** Quando abilitato, ogni file .pklz aggiunto al database attraverso **Aggiungi file pklz...** avrà anche un relativo conteggio hash creato. Un conteggio hash è un file di testo semplice che mostra ogni file audio contenuto nel .pklz e quanti hash ha contribuito ciascuno. I conteggi hash vengono salvati nella cartella dei conteggi hash impostata, preservando la gerarchia originale delle cartelle.
+
+#### Scheda Console
+
+- **Cartella dei log della console:** La cartella in cui vengono salvati i dump completi dei log della console fatti con **Stampa l'output della console su file di log** (viene creata automaticamente se non esiste). Usa **Scegli...** per selezionare una cartella o digita direttamente il percorso. Se il campo viene lasciato vuoto, torna alla cartella predefinita `console_logs` accanto all'applicazione.
+- **Stampa l'output della console su file di log:** Scrive tutto ciò che è attualmente visibile nella Console in un file .txt con timestamp all'interno della cartella dei log della console. Il nome del file segue lo schema `AAAA-MM-GG_OO-MM-SS_v{versione}_WZSGUI_CLog.txt`, così i salvataggi successivi non si sovrascrivono mai. Utile per allegare i log a una segnalazione di bug o per conservare una traccia di una scansione.
+- **Apri il file dei crash log...:** Apre il file `crash_logs.txt` di WerZatSonGUI (il dump stdout/stderr all'avvio). Completamente indipendente dai log della console.
+
+#### Scheda .env
+
+- **Comando Python:** Scegli se WerZatSong debba essere avviato utilizzando il semplice comando **python** o il percorso completo dell'eseguibile di Python. Utilizza il percorso completo se hai più installazioni di Python o se Python non è presente nel PATH di sistema.
+- **Comando FFmpeg:** Scegli se utilizzare il semplice comando **ffmpeg** o il percorso completo dell'eseguibile di FFmpeg. Utilizza il percorso completo se FFmpeg non è presente nel PATH o se devi forzare una versione specifica.
+- **Comando Node:** Scegli se utilizzare il semplice comando **node** o il percorso completo dell'eseguibile di Node.js. Utilizza il percorso completo se Node non è presente nel PATH o se devi forzare una versione specifica.
+
 ### Aggiungere file da scansionare
 
 Usa **Aggiungi file audio...** in fondo alla finestra per aggiungere le canzoni che vuoi cercare, scegliendo singoli file oppure un'intera cartella. WerZatSonGUI accetta file `.mp3`, `.wav`, `.flac` e `.m4a`. Qualsiasi cosa non sia già un `.mp3` viene **automaticamente convertita** nel formato mp3 VBR della massima qualità che FFmpeg può produrre non appena inizia una scansione.
 
 > **ATTENZIONE: Questa conversione RIMPIAZZA il file originale.** 
 > Una volta che un `.wav`/`.flac`/`.m4a` viene convertito, nella tua cartella di input rimane solo l'`.mp3` risultante. Tieni prima una copia altrove se vuoi conservare il file originale codificato senza perdita (o comunque con una codifica diversa). La conversione è a prova di crash (un'esecuzione interrotta non ti lascia mai con un file mezzo convertito o mancante, semplicemente riprova in modo pulito la volta successiva), ma è unidirezionale.
+
+Sia la finestra **Aggiungi file PKLZ...** che **Aggiungi file audio...** hanno una scelta **Sposta / Copia** in fondo. **Sposta** (l'opzione predefinita) copia i file/cartelle selezionati nella destinazione, poi elimina gli originali una volta che la copia riesce. **Copia** lascia gli originali esattamente dove si trovavano. La scelta viene salvata nel momento in cui la clicchi, quindi sopravvive a un **Annulla**, e viene ricordata separatamente per la finestra Aggiungi PKLZ e per quella Aggiungi audio. Se il sorgente che hai scelto risulta essere la cartella di destinazione stessa, o è contenuto al suo interno, o la contiene, la copia avviene comunque ma l'eliminazione viene saltata in sicurezza, così una selezione sbagliata non può mai cancellare i tuoi dati.
 
 ## Modalità di ricerca spiegate
 
@@ -394,19 +420,37 @@ Usa **Aggiungi file audio...** in fondo alla finestra per aggiungere le canzoni 
 
 ## Avviare una scansione: modalità veloce contro modalità lunga
 
+Quali di queste vengono eseguite in una data sessione si sceglie con il selettore **Modalità di scansione** sulla **scheda Generali** (**Solo veloce**, **Solo lunga**, oppure **Entrambe**, vedi sopra):
+
 - La **modalità Veloce** (quella predefinita) cerca ogni file in attesa esattamente così com'è, senza generare variazioni.
-- La **modalità Lunga** genera in aggiunta variazioni a velocità/tonalità alternative di ogni file (vedi la **scheda Modalità lunga** sopra), per poi cercare anche ogni variazione. Molto più approfondita, ma logicamente molto più lenta, dato che sta di fatto scansionando decine di file extra per ogni canzone.
+- La **modalità Lunga** genera in aggiunta variazioni a velocità/tonalità alternative di ogni file (vedi la **scheda Modalità lunga** sopra), per poi cercare anche ogni variazione. Molto più approfondita, ma logicamente molto più lenta, dato che sta di fatto scansionando decine di file extra per ogni canzone. Per una canzone che non ha ancora avuto un passaggio in modalità Veloce, il suo file originale viene incluso anche nel gruppo della modalità Lunga, così una sessione **Solo lunga** scansiona comunque tutto anche se non esegue mai il ciclo Veloce.
+- **Entrambe** esegue prima la modalità Veloce fino al completamento, poi la modalità Lunga, per una scansione completa con un solo clic al costo del tempo di esecuzione totale più lungo.
 
 In entrambi i casi, WerZatSonGUI non passa mai l'intero elenco di file al motore sottostante tutto in una volta: WerZatSong ha un **limite massimo di 30 file per ricerca**, quindi tutto viene prima suddiviso in gruppi. I gruppi sono normalmente proprio di **30 file** (o, in modalità Lunga, 30 variazioni) alla volta.
 
 In modalità Veloce è semplice: 45 file in attesa si suddividono in 30/15.
 In modalità Lunga è un pelino più intelligente, perché il *numero di variazioni per file* non è fisso e raramente si divide in modo esatto per 30: invece di usare un gruppo di 30 seguito da un minuscolo gruppo residuo di, ad esempio, 3 variazioni, WerZatSonGUI mantiene una riserva comune di variazioni non ancora cercate tra i vari file, e finalizza la dimensione di un gruppo solo quando sa davvero quanto resta da cercare. Più concretamente: se per il file A si producono 33 variazioni, le prime 30 vengono usate non appena pronte, e le restanti 3 vengono trattenute e unite alle prime 27 variazioni generate per il file B, formando un secondo gruppo completo di 30. Così via per tutti i file necessari, invece di utilizzare mai un gruppo residuo sprecato e quasi vuoto. Il limite massimo di 30 file viene comunque sempre rispettato tecnicamente all'interno del programma, ma per fortuna non c'è più bisogno di preoccuparsene.
 
-## File processati e PROCESSED.txt
+Se selezioni più di una sottocartella PKLZ nella finestra **Seleziona cartelle PKLZ...**, la modalità Lunga deve rigenerare da zero ogni variazione di velocità/tonalità per **ciascuna** sottocartella a turno (le variazioni non vengono mai tenute su disco tra una sottocartella e l'altra, per mantenere limitato l'uso del disco), quindi una scansione su tre sottocartelle richiede il triplo del lavoro di ffmpeg rispetto a una scansione su una sola. La console stampa una riga `[ATTENZIONE]` prima che l'esecuzione inizi ogni volta che sta per succedere.
 
-Ogni file che WerZatSonGUI finisce di cercare (in modalità Veloce, Lunga, o entrambe, a seconda di quale modalità/i abbia usato) viene registrato come riga in `PROCESSED.txt`, alla radice della cartella di WerZatSonGUI, in modo che una scansione successiva non cerchi mai due volte lo stesso file nella stessa modalità. Ogni riga è il percorso relativo del file all'interno della tua Cartella di input, seguito facoltativamente da `|quick` o `|long` se è stato processato solo in una modalità specifica invece che in entrambe.
+MusicBrainz, AudioTag e Shazam non sono legati a una specifica sottocartella PKLZ, quindi ciascuno viene eseguito una sola volta per ogni modalità di scansione effettivamente eseguita in questa sessione, contro la prima sottocartella PKLZ che completa con successo del lavoro. Se una sottocartella va in crash a metà (esaurimento di memoria, un `.pklz` danneggiato, ecc.) per alcune delle sue canzoni, quelle canzoni specifiche ottengono la loro copertura MusicBrainz/AudioTag/Shazam in un'esecuzione successiva, e la console stampa una riga `[ATTENZIONE]` che indica quante canzoni sono state interessate.
 
-Puoi modificare liberamente questo file a mano: elimina una riga (o un intero file) per far sì che WerZatSonGUI lo cerchi di nuovo la volta successiva, oppure usa **Segna tutti i file audio come processati in** (vedi la **scheda Generali** sopra) per segnare tutto in blocco, così da poter poi eliminare solo le poche righe dei file che vuoi effettivamente (ri)cercare. Molto più veloce che eliminare centinaia di righe singole nel verso opposto.
+Un gruppo conta come completato solo quando `werzatsong.js` esce con codice `0`. Se esce con qualsiasi altro codice, ogni canzone in quel gruppo viene ritentata sulla sottocartella PKLZ successiva, e sulla scansione successiva se nessuna sottocartella riesce per essa. Questo è un cambiamento rispetto al comportamento precedente alla revisione, che segnava un gruppo come processato anche quando la scansione sottostante era andata in crash, saltando quelle canzoni per sempre in modo silenzioso.
+
+## Canzoni processate e finestre di selezione
+
+WerZatSonGUI tiene traccia di quali canzoni sono già state scansionate usando due file JSON dentro `assets\listsProcessed`: `processed-songs-mode-quick.json` e `processed-songs-mode-long.json`, uno per modalità di scansione. Una canzone è elencata nel file di una modalità se è già stata scansionata in quella modalità, oppure se l'hai deliberatamente esclusa; qualsiasi canzone **non** elencata lì è in attesa per quella modalità. Questo sostituisce il vecchio `PROCESSED.txt` unico delle versioni precedenti.
+
+![Finestra di selezione canzoni](../assets/images/song_selection_dialog.png)
+![Finestra di selezione cartelle PKLZ](../assets/images/pklz_selection_dialog.png)
+
+Per cambiare quali canzoni sono in attesa, apri **Seleziona canzoni...** (vedi la **scheda Generali** sopra): mostra ogni canzone della tua Cartella di input come un albero, con una casella **Veloce** e una **Lunga** su ogni riga. Cliccare la casella di una cartella cambia tutte le canzoni al suo interno in una volta sola. Questa finestra è dove ora vive il vecchio flusso di lavoro "Segna tutti i file audio come processati in", senza dover poi modificare un file di testo a mano.
+
+Ogni file JSON memorizza anche la cartella di input per cui è stato scritto. Se in seguito cambi l'impostazione **Cartella di input**, il file corrispondente viene ignorato in lettura e lasciato invariato in scrittura, così la sua lista sopravvive nel caso tu sposti indietro la cartella di input. La prima scansione dopo un cambiamento del genere mostra un prompt che offre di reimpostare il file in modo che corrisponda alla tua Cartella di input attuale (mantenendo le voci già processate, aggiornando solo il percorso salvato).
+
+Se vuoi ricercare una canzone specifica, apri **Seleziona canzoni...**, trovala, spunta la casella della modalità che vuoi rieseguire, clicca **Salva**, poi avvia una nuova scansione.
+
+La primissima volta che avvii questa versione, un eventuale `PROCESSED.txt` esistente viene migrato automaticamente nei due file JSON di cui sopra, e l'originale viene conservato come `PROCESSED.txt.migrated.bak` nella cartella dell'app come riferimento.
 
 ## Dove trovare i risultati
 
@@ -443,6 +487,6 @@ WerZatSonGUI attualmente è disponibile in **italiano**, **inglese**, **francese
 
 ## Crediti
 
-- **WerZatSonGUI v1.4.0** di some random account, con contributi da EierkuchenHD. Tester: EierkuchenHD, Shardanik, VoidGod. Traduzione in italiano a cura di some random account.
+- **WerZatSonGUI v2.0.0** di some random account, con contributi da EierkuchenHD e VoidGod. Tester: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_. Traduzione in italiano a cura di some random account.
 - **Script per provare in blocco canzoni su WerZatSong** di some random account, con logica per la generazione di file a velocità alternative di Mystic65.
 - **WerZatSong** di Nel, con contributi da Numerophobe, AzureBlast e Mystic65.

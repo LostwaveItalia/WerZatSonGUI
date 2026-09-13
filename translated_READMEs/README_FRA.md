@@ -1,13 +1,11 @@
 # WerZatSonGUI
 ![Plateforme: Windows x64](https://img.shields.io/badge/Platforme-Windows%20x64-blue)
-![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-orange)
+![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-orange)
 
 ![WerZatSonGUI effectuant une analyse en mode sombre](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI effectuant une analyse en mode clair](../assets/images/gui_screenshot_2.png)
 
-(REMARQUE : Ceci est une traduction en cours de réalisation, générée par une IA et produite par le développeur, qui ne parle pas français. La traduction est actuellement en attente de relecture par des locuteurs natifs français.)
-
-**WerZatSonGUI** est une application de bureau Windows x64 qui offre une interface graphique complète pour [**WerZatSong**](https://github.com/Nel80s/WerZatSong), l'outil original de recherche de chansons en ligne de commande. Si vous avez déjà utilisé WerZatSong, cette application fonctionne essentiellement de la même manière, mais vous n'avez plus besoin d'ouvrir manuellement un terminal ni de saisir des commandes pour l'utiliser. Consultez la section [*🌟 Fonctionnalités*](#-fonctionnalit%C3%A9s) pour plus d'informations.
+**WerZatSonGUI** est une application de bureau Windows x64 qui offre une interface graphique complète pour [**WerZatSong**](https://github.com/Nel80s/WerZatSong), un outil de recherche de chansons en ligne. Si vous avez déjà utilisé WerZatSong, cette application fonctionne de la même manière, mais vous n'avez plus besoin d'ouvrir manuellement un terminal ni de saisir des commandes pour l'utiliser. Consultez la section [*🌟 Fonctionnalités*](#-fonctionnalit%C3%A9s) pour plus d'informations.
 
 Ce document explique comment installer WerZatSonGUI, le configurer pour la première fois et utiliser toutes les fonctionnalités de son interface.
 > **For English speakers**: a full English translation of this document is available in [**README.md**](../README.md).
@@ -32,7 +30,7 @@ Ce document explique comment installer WerZatSonGUI, le configurer pour la premi
 - [Utilisation de WerZatSonGUI](#utilisation-de-werzatsongui)
 - [Explication des modes de recherche](#explication-des-modes-de-recherche)
 - [Lancer une analyse: mode rapide ou mode long](#lancer-une-analyse-mode-rapide-ou-mode-long)
-- [Fichiers traités & PROCESSED.txt](#fichiers-trait%C3%A9s--processedtxt)
+- [Chansons traitées et fenêtres de sélection](#chansons-traitées-et-fenêtres-de-sélection)
 - [Où trouver les résultats](#o%C3%B9-trouver-les-r%C3%A9sultats)
 - [Format des journaux](#format-des-journaux)
 
@@ -91,7 +89,11 @@ Ce document explique comment installer WerZatSonGUI, le configurer pour la premi
 - Prise en charge de **bases de données de chansons entières** grâce à un **moteur d'analyse par lots**, qui vous permet d'ajouter autant de fichiers audio que vous le souhaitez au programme: il analysera automatiquement au maximum 20 à 30 fichiers à la fois, de la manière la plus efficace possible (voir [*Lancer une analyse: mode rapide ou mode long*](#lancer-une-analyse-mode-rapide-ou-mode-long) ci-dessous). Des liens vers les bases de données communautaires [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) et [@user-QLostwave (Q)](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) sont inclus dans le programme sous la section **Add Audio Files...**.
 - Un script intégré de **Mystic65**, qui peut générer et rechercher automatiquement des dizaines de **variations de tempo/hauteur** de chaque fichier, pour aider à identifier les chansons accélérées, ralenties ou dont la hauteur a été modifiée (voir [*Lancer une analyse: mode rapide ou mode long*](#lancer-une-analyse-mode-rapide-ou-mode-long) ci-dessous).
 - Une **refonte de la base de WerZatSong** et une **refonte des journaux** (voir [*Format des journaux*](#format-des-journaux) ci-dessous) par **EierkuchenHD.**
-- Une nouvelle section **Fichiers traités...**. Si vous avez un nombre important de chansons dans votre dossier d'entrée, vous pouvez désormais décider facilement lesquelles vous souhaitez analyser avec WerZatSonGUI, **sans** avoir à les déplacer hors de ce dossier (voir [*Fichiers traités & PROCESSED.txt*](#fichiers-trait%C3%A9s--processedtxt) ci-dessous).
+- Deux fichiers JSON de **chansons traitées** (un par mode d'analyse) remplacent l'ancien `PROCESSED.txt` unique. Si vous avez un nombre important de chansons dans votre dossier d'entrée, vous pouvez désormais décider facilement lesquelles analyser avec WerZatSonGUI grâce à la fenêtre **Sélectionner des morceaux...**, **sans** avoir à éditer un fichier texte à la main ni à les déplacer hors de ce dossier (voir [*Chansons traitées et fenêtres de sélection*](#chansons-traitées-et-fenêtres-de-sélection) ci-dessous).
+- Un sélecteur **Mode d'analyse** (**Rapide uniquement**, **Long uniquement**, **Les deux**) qui décide quels modes s'exécutent lors de la session en cours, remplaçant l'ancienne case "générer des tempos différents", avec une option d'analyse complète en un seul clic (voir [*Lancer une analyse: mode rapide ou mode long*](#lancer-une-analyse-mode-rapide-ou-mode-long) ci-dessous).
+- Une fenêtre **Sélectionner des morceaux...**: un arbre de votre dossier d'entrée avec une case Rapide/Long par morceau, vous permettant de planifier exactement quels morceaux sont candidats pour chaque mode.
+- Une fenêtre **Sélectionner des dossiers PKLZ...**: un arbre des sous-dossiers de votre base de données Audfprint, vous permettant de restreindre une analyse à des collections de fingerprints spécifiques au lieu de toujours analyser toute la base. Utiliser plus d'un sous-dossier fait que le mode Long régénère ses variations une fois par sous-dossier, ce dont la console vous avertit.
+- Un choix **Copier / Déplacer** dans les fenêtres **Add PKLZ Files...** et **Add Audio Files...**. Déplacer (l'option par défaut) supprime les fichiers source après une copie réussie; Copier les laisse où ils sont.
 - Prise en charge de **plusieurs langues** et **traductions**. Actuellement, les langues prises en charge sont le français, l'anglais, l'italien et le portugais (voir [*Ajouter une langue / Traductions*](#ajouter-une-langue--traductions) ci-dessous).
 - Prise en charge des modes **clair** et **sombre**.
 
@@ -99,7 +101,7 @@ Ce document explique comment installer WerZatSonGUI, le configurer pour la premi
 
 WerZatSonGUI n'est actuellement **pris en charge que sur Windows x64** (il repose sur des fonctionnalités spécifiques à Windows telles que l'ouverture de dossiers dans l'Explorateur de fichiers et le lancement de fenêtres de console natives).
 
-> **Remarque:** Vous n'avez **pas** besoin d'installer vous-même ces éléments! L'installateur décrit ci-dessous s'occupe automatiquement de Node.js, Python et FFmpeg en utilisant **WinGet** (en vérifiant correctement à la fois qu'ils sont installés *et* qu'ils respectent la version minimale ci-dessus, en les mettant à niveau si une ancienne copie est trouvée), et vous guide dans l'installation de Rust et des outils de compilation C++ (voir ci-dessous pour les raisons). Les exigences ne sont listées ici que pour que l'utilisateur sache ce qui se passe pendant l'installation, et pour le cas exceptionnel où l'installation échouerait pour l'un d'eux (voir *"Si l'installateur ne fonctionne pas"* ci-dessous).
+> **Remarque:** Vous n'avez **pas** besoin d'installer vous-même ces éléments! L'installateur décrit ci-dessous s'occupe automatiquement de Node.js, Python et FFmpeg en utilisant **WinGet** (en vérifiant correctement à la fois qu'ils sont installés *et* qu'ils respectent la version minimale ci-dessus, en les mettant à niveau si une ancienne copie est trouvée), et vous guide dans l'installation de Rust et des outils de compilation C++ (voir ci-dessous pour les raisons). Les exigences ne sont listées ici que pour que l'utilisateur sache ce qui se passe pendant l'installation, et pour le cas exceptionnel où l'installation échouerait pour l'un d'eux (voir *"Si l'installation ne marche pas"* ci-dessous).
 
 Les exigences sont les mêmes que celles dont le WerZatSong original a besoin pour fonctionner:
 
@@ -179,7 +181,7 @@ Une fois terminé, vous pouvez fermer la fenêtre et exécuter WerZatSonGUI: cel
 
 ### Recommandé (si vous avez déjà WerZatSong ou une ancienne WerZatSonGUI installée): upgrade_to_GUI.zip
 
-Si vous préférez ne pas exécuter l'installateur du tout (par exemple, pour éviter l'avertissement SmartScreen décrit dans [*Avertissements SmartScreen / Antivirus*](#avertissements-smartscreen--antivirus) ci-dessous), et que vous avez déjà soit le **WerZatSong** original en ligne de commande, soit une ancienne copie de **WerZatSonGUI** installée et fonctionnelle, vous n'avez pas besoin de tout réinstaller à partir de zéro. Dans les versions publiées, vous trouverez `upgrade_to_GUI.zip`. Extrayez cette archive dans un dossier vide et exécutez `upgrade_to_GUI.bat`: il gérera automatiquement les deux cas puisque presque tout ce dont il a besoin (Node.js, Python, Rust, les outils de compilation C++, FFmpeg) est déjà sur votre système.
+Si vous préférez ne pas exécuter l'installateur du tout (par exemple, pour éviter l'avertissement SmartScreen décrit dans [*Avertissements SmartScreen / Antivirus*](#avertissements-smartscreen--antivirus) ci-dessous), et que vous avez déjà soit le **WerZatSong** original en ligne, soit une ancienne copie de **WerZatSonGUI** installée et fonctionnelle, vous n'avez pas besoin de tout réinstaller à partir de zéro. Dans les versions publiées, vous trouverez `upgrade_to_GUI.zip`. Extrayez cette archive dans un dossier vide et exécutez `upgrade_to_GUI.bat`: il gérera automatiquement les deux cas puisque presque tout ce dont il a besoin (Node.js, Python, Rust, les outils de compilation C++, FFmpeg) est déjà sur votre système.
 
 Double-cliquez dessus et il va:
 
@@ -196,7 +198,7 @@ Double-cliquez dessus et il va:
 
 Une fois terminé, utilisez ce raccourci (ou double-cliquez directement sur `WerZatSonGUI.pyw` dans le dossier) pour lancer l'application. Si vous ne pouvez pas double-cliquer sur le fichier ou utiliser le raccourci directement, ouvrez le fichier `WerZatSonGUI.pyw` avec `pythonw.exe` ou `pyw.exe`. Si une analyse se plaint ultérieurement d'un module Node manquant, ouvrez un terminal dans ce dossier et exécutez `npm install` une fois.
 
-### Si l'installateur ne fonctionne pas
+### Si l'installation ne marche pas
 
 Si une étape de l'installateur automatique échoue, vous pouvez tout installer à la main:
 
@@ -321,7 +323,7 @@ Si vous préférez contourner complètement l'installateur signalé, et que vous
 
 ## Utilisation de WerZatSonGUI
 
-Une fois la configuration terminée, WerZatSonGUI ouvre son interface complète à chaque lancement. En mode fenêtré comme en mode maximisé/plein écran, la barre d'action supérieure (**Add PKLZ Files...**, **Add Audio Files...**, **Processed Files...**, **Force Stop**, **Start WerZatSong**) reste toujours visible et accessible. Si le reste de l'interface ne tient pas dans l'espace disponible (par exemple avec les sections **Clés API et Webhook** et **Répertoires** dépliées sur un écran plus petit), la section au-dessus de la barre d'action défile au lieu de la pousser hors de l'écran.
+Une fois la configuration terminée, WerZatSonGUI ouvre son interface complète à chaque lancement. En mode fenêtré comme en mode maximisé/plein écran, la barre d'action supérieure (**Add PKLZ Files...**, **Add Audio Files...**, **Open Processed Folder...**, **Force Stop**, **Start WerZatSong**) reste toujours visible et accessible. Si le reste de l'interface ne tient pas dans l'espace disponible (par exemple avec les sections **Clés API et Webhook** et **Répertoires** dépliées sur un écran plus petit), la section au-dessus de la barre d'action défile au lieu de la pousser hors de l'écran.
 
 ### En-tête
 
@@ -354,23 +356,26 @@ Quatre cases à cocher pour activer ou désactiver **MusicBrainz (AcoustID)**, *
 
 ### Paramètres avancés
 
-Divisé en cinq onglets pour regrouper les paramètres connexes. Chaque paramètre individuel a un petit bouton **[?]** à sa gauche avec une courte explication, et cette section résume également ce que chacun fait. Tout ce panneau est grisé pendant qu'une analyse est en cours.
+Divisé en huit onglets pour regrouper les paramètres connexes. Chaque paramètre individuel a un petit bouton **[?]** à sa gauche avec une courte explication, et cette section résume également ce que chacun fait. Tout ce panneau est grisé pendant qu'une analyse est en cours.
 
 #### Onglet Général
 
-- **Marquer tous les fichiers audio comme traités dans:** Utile si vous avez beaucoup de fichiers dans votre dossier d'entrée et que vous souhaitez n'en traiter que quelques-uns spécifiques. Marque tous les fichiers audio de votre dossier d'entrée comme **traités** en mode **Rapide** (pas de génération de tempo supplémentaire), mode **Long** (fichiers originaux et tempos additionnels) ou **les deux** modes, afin que vous puissiez supprimer manuellement les lignes des chansons que vous ne voulez pas traiter en éditant **PROCESSED.txt**. Appuyer sur l'un des 3 boutons **écrase** votre fichier PROCESSED.txt actuel (voir [*Fichiers traités & PROCESSED.txt*](#fichiers-trait%C3%A9s--processedtxt) ci-dessous).
+- **Mode d'analyse:** un sélecteur à trois choix, **Rapide uniquement**, **Long uniquement** ou **Les deux**, qui décide quels modes de recherche s'exécutent réellement. Voir [*Lancer une analyse: mode rapide ou mode long*](#lancer-une-analyse-mode-rapide-ou-mode-long) ci-dessous pour ce que fait chaque option.
+- **Sélectionner des morceaux...** et **Sélectionner des dossiers PKLZ...:** se trouvent côte à côte au-dessus de la ligne Mode d'analyse, partageant un seul bouton **[?]** à leur gauche. Cliquer dessus ouvre un petit sélecteur permettant de choisir laquelle des deux explications lire. **Sélectionner des morceaux...** ouvre une fenêtre listant chaque morceau de votre Répertoire d'entrée avec une case Rapide/Long chacun, remplaçant l'ancienne fonction "Marquer tous les fichiers audio comme traités dans". **Sélectionner des dossiers PKLZ...** ouvre une fenêtre listant les sous-dossiers de votre Répertoire de la base de données Audfprint, vous permettant de restreindre les recherches Audfprint à des sous-dossiers spécifiques au lieu de toujours analyser toute la base (son explication couvre les compromis liés au choix de plusieurs sous-dossiers). Voir [*Chansons traitées et fenêtres de sélection*](#chansons-traitées-et-fenêtres-de-sélection) ci-dessous pour les deux.
 - **Thème:** Modifie l'apparence visuelle de l'application. Réglez sur **Clair**, **Sombre**, ou **Par défaut du système** pour correspondre automatiquement aux paramètres de votre système d'exploitation.
 - **Langue:** Bascule l'interface entre le **français** et une autre langue prise en charge. Prend effet immédiatement, aucun redémarrage requis (voir [*Ajouter une langue / Traductions*](#ajouter-une-langue--traductions) ci-dessous si vous souhaitez aider à en ajouter d'autres).
 
 #### Onglet Mode long
 
-- **Activer le mode long (générer différentes vitesses/tempos pour chaque fichier audio):** bascule les analyses entre le mode **Rapide** et **Long**. Voir [*Lancer une analyse: mode rapide ou mode long*](#lancer-une-analyse-mode-rapide-ou-mode-long) ci-dessous.
+Le fait que le mode Long s'exécute ou non lors de cette session est désormais décidé par le sélecteur **Mode d'analyse** de l'**onglet Général** ci-dessus, et non par une case sur cet onglet.
+
 - **Multiplicateurs de tempo négatifs** / **Multiplicateurs de tempo positifs:** les rapports de tempo utilisés pour générer des variations en mode Long (négatif = ralenti/transposé vers le bas, inférieur à `1.0`; positif = accéléré/transposé vers le haut, supérieur à `1.0`). Modifiez-les sous forme de liste séparée par des virgules entre crochets, par ex. `[0.9, 0.95, 1.05, 1.1]`. Laisser **un** champ vide (ou `[]`) fait que WerZatSonGUI génère des variations uniquement à partir de l'autre tableau; laisser **les deux** vides restaure l'ensemble complet de 40 variations par défaut (20 négatives + 20 positives).
 
 #### Onglet Audfprint
 
-- **Utiliser uniquement les empreintes de ce sous-répertoire:** restreint le mode Audfprint à un seul sous-dossier de votre répertoire de base de données Audfprint au lieu de tous les parcourir. Utilisez **Browse...** pour en choisir un, ou tapez directement son nom (il doit déjà exister dans le répertoire de la base de données Audfprint).
-- **Définir le nombre de threads CPU à utiliser:** définit combien de threads CPU le mode Audfprint utilise. WerZatSong lui-même plafonne cela à **16** quelle que soit la valeur saisie, pour aider à éviter l'épuisement de la mémoire; laisser cette case décochée lui permet d'utiliser automatiquement tous les threads disponibles sur votre machine.
+Le choix de sous-dossiers PKLZ spécifiques se fait désormais via le bouton **Sélectionner des dossiers PKLZ...** de l'**onglet Général**, plus sur cet onglet; le popup **[?]** à côté explique les compromis liés au choix de plusieurs sous-dossiers.
+
+- **Définir le nombre de fils CPU à utiliser:** définit combien de fils CPU le mode Audfprint utilise. WerZatSong lui-même plafonne cela à **16** quelle que soit la valeur saisie, pour aider à éviter l'épuisement de la mémoire; laisser cette case décochée lui permet d'utiliser automatiquement tous les threads disponibles sur votre machine.
 - **Définir la profondeur de recherche sur:** contrôle l'agressivité avec laquelle Audfprint recherche une correspondance, de `1` à `8`. Des valeurs plus élevées effectuent une "recherche approfondie" plus minutieuse pour les extraits de faible qualité, mais peuvent augmenter considérablement le temps de traitement. Par défaut `4`.
 
 #### Onglet MusicBrainz
@@ -383,12 +388,31 @@ Divisé en cinq onglets pour regrouper les paramètres connexes. Chaque paramèt
 - **Utiliser un nom de webhook personnalisé:** remplace le nom d'affichage que votre webhook Discord utilise lors de la publication, au lieu du défaut "WerZatSong".
 - **Utiliser une image de webhook personnalisée:** remplace l'image d'avatar que votre webhook Discord utilise lors de la publication. Le lien doit commencer par `https://cdn.discordapp.com/icons/`, `https://cdn.discordapp.com/app-icons/` ou `https://cdn.discordapp.com/avatars/`, sinon Discord ne le reconnaîtra pas. L'image doit être au format `.webp`. Vous pouvez obtenir un lien correctement formaté en définissant l'image comme photo de profil d'un bot Discord et en copiant le lien à partir de là (si nécessaire, en supprimant tout paramètre de taille à la fin et en changeant l'extension en `.webp`).
 
+#### Onglet Nombres de hachage
+
+- **Répertoire des nombres de hachage des fichiers .pklz:** Le dossier dans lequel les nombres de hachage sont enregistrés (créé automatiquement s'il est absent). Les nombres de hachage sont les fichiers en texte brut générés pour chaque .pklz ajouté à la base de données lorsque **Créer des nombres de hachage pour chaque fichier .pklz ajouté** est activé: ils indiquent chaque fichier audio contenu dans un .pklz et le nombre de hashes que chacun a fournis. Utilisez **Parcourir...** pour choisir un dossier ou saisissez directement son chemin. Si le champ est laissé vide, il revient au dossier par défaut `hash_tables` à côté de l'application.
+- **Créer des nombres de hachage pour chaque fichier .pklz ajouté:** Lorsqu'activé, chaque fichier .pklz ajouté à la base de données via **Ajouter des fichiers pklz...** aura également un nombre de hachage créé pour lui. Un nombre de hachage est un fichier en texte brut indiquant chaque fichier audio contenu dans le .pklz et le nombre de hashes que chacun a fournis. Les nombres de hachage sont enregistrés dans le répertoire des nombres de hachage configuré, en préservant la hiérarchie originale des dossiers.
+
+#### Onglet Console
+
+- **Répertoire des journaux de la console:** Le dossier dans lequel les vidages du journal de la console produits par **Imprimer la sortie de la console dans un fichier journal** sont enregistrés (créé automatiquement s'il est absent). Utilisez **Parcourir...** pour choisir un dossier ou saisissez directement son chemin. Si le champ est laissé vide, il revient au dossier par défaut `console_logs` à côté de l'application.
+- **Imprimer la sortie de la console dans un fichier journal:** Écrit tout ce qui est actuellement affiché dans la Console dans un fichier .txt horodaté situé dans le répertoire des journaux de la console. Le nom du fichier suit le format `AAAA-MM-JJ_HH-MM-SS_v{version}_WZSGUI_CLog.txt`, de sorte que les vidages successifs ne s'écrasent jamais. Utile pour joindre des journaux à un rapport de bug ou pour conserver une trace d'une analyse.
+- **Ouvrir le fichier des journaux de plantage...:** Ouvre le fichier `crash_logs.txt` de WerZatSonGUI (le vidage stdout/stderr au démarrage). Complètement indépendant des journaux de la console.
+
+#### Onglet .env
+
+- **Commande Python:** Choisissez si WerZatSong doit être lancé à l'aide de la simple commande **python** ou du chemin d'accès complet vers l'exécutable Python. Utilisez le chemin d'accès complet si vous disposez de plusieurs installations Python ou si Python ne figure pas dans votre variable d'environnement PATH.
+- **Commande FFmpeg:** Choisissez si vous souhaitez utiliser la commande simple **ffmpeg** ou le chemin d'accès complet à l'exécutable FFmpeg. Utilisez le chemin d'accès complet si FFmpeg ne figure pas dans votre PATH ou si vous devez forcer l'utilisation d'une version spécifique.
+- **Commande Node:** Choisissez si vous souhaitez utiliser la commande simple **node** ou le chemin d'accès complet à l'exécutable Node.js. Utilisez le chemin d'accès complet si Node ne figure pas dans votre PATH ou si vous devez forcer l'utilisation d'une version spécifique.
+
 ### Ajouter des fichiers à analyser
 
 Utilisez **Add Audio Files...** en bas de la fenêtre pour ajouter les chansons que vous souhaitez rechercher, soit en choisissant des fichiers individuels, soit un dossier entier. WerZatSonGUI accepte les fichiers `.mp3`, `.wav`, `.flac` et `.m4a`. Tout ce qui n'est pas déjà un `.mp3` est **automatiquement converti** en mp3 VBR de la plus haute qualité que FFmpeg puisse produire au moment où une analyse démarre.
 
 > **AVERTISSEMENT: Cette conversion REMPLACE le fichier original.**
 > Une fois qu'un fichier `.wav`/`.flac`/`.m4a` est converti, seul le `.mp3` résultant reste dans votre dossier d'entrée. Gardez une copie ailleurs d'abord si vous voulez conserver le fichier original encodé sans perte (ou encodé différemment). La conversion est sûre en cas de plantage (une exécution interrompue ne laisse jamais un fichier à moitié converti ou manquant, elle réessaie proprement la prochaine fois), mais elle est à sens unique.
+
+Les fenêtres **Add PKLZ Files...** et **Add Audio Files...** ont toutes deux un choix **Déplacer / Copier** en bas. **Déplacer** (l'option par défaut) copie les fichiers/dossiers sélectionnés vers la destination, puis supprime les originaux une fois la copie réussie. **Copier** laisse les originaux exactement où ils étaient. Le choix est enregistré dès que vous cliquez dessus, donc il survit à un **Annuler**, et il est mémorisé séparément pour la fenêtre Add PKLZ et pour la fenêtre Add Audio. Si la source choisie s'avère être le dossier de destination lui-même, ou se trouve à l'intérieur, ou le contient, la copie a quand même lieu mais la suppression est sûrement ignorée, afin qu'une sélection incorrecte ne puisse jamais supprimer vos données.
 
 ## Explication des modes de recherche
 
@@ -399,19 +423,37 @@ Utilisez **Add Audio Files...** en bas de la fenêtre pour ajouter les chansons 
 
 ## Lancer une analyse: mode rapide ou mode long
 
+Lequel de ces modes s'exécute lors d'une session donnée se choisit avec le sélecteur **Mode d'analyse** de l'**onglet Général** (**Rapide uniquement**, **Long uniquement**, ou **Les deux**, voir ci-dessus):
+
 - **Mode rapide** (par défaut) recherche chaque fichier en attente tel quel, sans générer de variations.
-- **Mode long** génère d'abord des variations de tempo/hauteur de chaque fichier (voir l'**onglet Mode long** ci-dessus), puis recherche également chaque variation. Beaucoup plus minutieux, mais beaucoup plus lent, car il analyse effectivement des dizaines de fichiers supplémentaires par chanson.
+- **Mode long** génère d'abord des variations de tempo/hauteur de chaque fichier (voir l'**onglet Mode long** ci-dessus), puis recherche également chaque variation. Beaucoup plus minutieux, mais beaucoup plus lent, car il analyse effectivement des dizaines de fichiers supplémentaires par chanson. Pour une chanson n'ayant pas encore eu de passage en mode Rapide, son fichier original est aussi inclus dans le lot du mode Long, de sorte qu'une session **Long uniquement** analyse quand même tout, même si elle n'exécute jamais la boucle Rapide.
+- **Les deux** exécute d'abord le mode Rapide jusqu'à son terme, puis le mode Long, pour une analyse complète en un seul clic au prix du temps d'exécution total le plus long.
 
 Dans les deux cas, WerZatSonGUI ne remet jamais la liste complète des fichiers au moteur sous-jacent d'un seul coup: WerZatSong lui-même a une **limite stricte de 30 fichiers par recherche**, donc tout est divisé en lots à l'avance. Les lots sont normalement de ce même nombre, **30 fichiers** (ou, en mode Long, 30 variations) à la fois.
 
 En mode rapide, c'est simple: 45 fichiers en attente deviennent une division 30/15.
 En mode long, c'est un peu plus intelligent, car le *nombre de variations par fichier* n'est pas fixe et se divise rarement par 30: plutôt que d'envoyer un lot de 30 suivi d'un petit lot de, disons, 3 variations restantes, WerZatSonGUI maintient un pool de variations non encore recherchées à travers les fichiers et ne finalise la taille d'un lot qu'une fois qu'il sait combien il reste réellement à rechercher. Concrètement: si le fichier A produit 33 variations, les 30 premières sont expédiées dès qu'elles sont prêtes, et les 3 restantes sont conservées et combinées avec les 27 premières variations générées pour le fichier B en un second lot complet de 30. Et ainsi de suite pour autant de fichiers que nécessaire, plutôt que d'envoyer un lot presque vide inutilement. La limite stricte de 30 fichiers est toujours techniquement respectée en interne par la logique du programme, mais vous n'avez plus à vous en préoccuper.
 
-## Fichiers traités & PROCESSED.txt
+Si vous sélectionnez plus d'un sous-dossier PKLZ dans la fenêtre **Sélectionner des dossiers PKLZ...**, le mode Long doit régénérer chaque variation de tempo/hauteur depuis zéro pour **chaque** sous-dossier à tour de rôle (les variations ne sont jamais conservées sur disque entre deux sous-dossiers, afin de garder l'utilisation du disque bornée), donc une analyse sur trois sous-dossiers demande trois fois le travail ffmpeg d'une analyse sur un seul. La console affiche une ligne `[AVERTISSEMENT]` avant que l'exécution démarre chaque fois que cela est sur le point de se produire.
 
-Chaque fichier que WerZatSonGUI finit de rechercher (en mode Rapide, en mode Long, ou les deux, selon le(s) mode(s) sous lequel il a été exécuté) est enregistré comme une ligne dans `PROCESSED.txt`, à la racine du dossier WerZatSonGUI, de sorte que relancer une analyse plus tard ne recherche jamais deux fois le même fichier dans le même mode. Chaque ligne est le chemin relatif du fichier dans votre répertoire d'entrée, éventuellement suffixé par `|quick` ou `|long` s'il n'a été traité que dans un mode spécifique plutôt que les deux.
+MusicBrainz, AudioTag et Shazam ne sont pas liés à un sous-dossier PKLZ spécifique, donc chacun ne s'exécute qu'une seule fois par mode d'analyse réellement exécuté lors de cette session, contre le premier sous-dossier PKLZ qui termine avec succès une partie du travail. Si un sous-dossier plante en cours de route (mémoire épuisée, `.pklz` corrompu, etc.) pour certaines de ses chansons, ces chansons obtiennent leur couverture MusicBrainz/AudioTag/Shazam lors d'une exécution ultérieure, et la console affiche une ligne `[AVERTISSEMENT]` indiquant combien de chansons ont été concernées.
 
-Vous pouvez librement éditer ce fichier à la main: supprimez une ligne (ou tout le fichier) pour que WerZatSonGUI le recherche à nouveau la prochaine fois, ou utilisez **Marquer tous les fichiers audio comme traités dans** (voir l'**onglet Général** ci-dessus) pour marquer tout en masse, puis supprimez juste les quelques lignes des fichiers que vous voulez réellement (re)chercher. Beaucoup plus rapide que de supprimer des centaines de lignes individuelles dans l'autre sens.
+Un lot n'est considéré comme terminé que lorsque `werzatsong.js` se termine avec le code `0`. S'il se termine avec un autre code, chaque chanson de ce lot est retentée sur le sous-dossier PKLZ suivant, et sur l'analyse suivante entièrement si aucun sous-dossier ne réussit pour elle. Il s'agit d'un changement par rapport au comportement d'avant cette refonte, qui marquait un lot comme traité même lorsque l'analyse sous-jacente avait planté, ignorant silencieusement ces chansons pour toujours.
+
+## Chansons traitées et fenêtres de sélection
+
+WerZatSonGUI garde la trace des chansons déjà analysées à l'aide de deux fichiers JSON sous `assets\listsProcessed`: `processed-songs-mode-quick.json` et `processed-songs-mode-long.json`, un par mode d'analyse. Une chanson est listée dans le fichier d'un mode si elle a déjà été analysée dans ce mode, ou si vous l'avez délibérément exclue; toute chanson **non** listée là est en attente pour ce mode. Ceci remplace l'ancien `PROCESSED.txt` unique des versions précédentes.
+
+![Fenêtre de sélection des morceaux](../assets/images/song_selection_dialog.png)
+![Fenêtre de sélection des dossiers PKLZ](../assets/images/pklz_selection_dialog.png)
+
+Pour changer quelles chansons sont en attente, ouvrez **Sélectionner des morceaux...** (voir l'**onglet Général** ci-dessus): il montre chaque chanson de votre Répertoire d'entrée sous forme d'arbre, avec une case **Rapide** et une case **Long** sur chaque ligne. Cliquer sur la case d'un dossier bascule toutes les chansons qu'il contient à la fois. Cette fenêtre est l'endroit où vit désormais l'ancien flux de travail "Marquer tous les fichiers audio comme traités dans", sans avoir besoin d'éditer un fichier texte à la main ensuite.
+
+Chaque fichier JSON stocke aussi le répertoire d'entrée pour lequel il a été écrit. Si vous changez ensuite votre paramètre **Répertoire d'entrée**, le fichier correspondant est ignoré en lecture et laissé intact en écriture, de sorte que sa liste survit si vous déplacez le dossier d'entrée en arrière. La première analyse après un tel changement affiche une invite proposant de réinitialiser le fichier pour qu'il corresponde à votre Répertoire d'entrée actuel (en conservant les entrées déjà traitées, en mettant juste à jour le chemin enregistré).
+
+Si vous voulez rechercher à nouveau une chanson en particulier, ouvrez **Sélectionner des morceaux...**, trouvez-la, cochez la case du mode que vous voulez relancer, cliquez sur **Enregistrer**, puis lancez une nouvelle analyse.
+
+La toute première fois que vous lancez cette version, tout `PROCESSED.txt` existant est automatiquement migré vers les deux fichiers JSON ci-dessus, et l'original est conservé sous le nom `PROCESSED.txt.migrated.bak` dans le dossier de l'application, à titre de référence.
 
 ## Où trouver les résultats
 
@@ -448,6 +490,6 @@ WerZatSonGUI est actuellement livré avec le **français**, l'**anglais**, l'**i
 
 ## Crédits
 
-- **WerZatSonGUI v1.4.0** par some random account, avec la contribution de EierkuchenHD. Testeurs: EierkuchenHD, Shardanik, VoidGod. Traduction en français: (T.E.C.).
+- **WerZatSonGUI v2.0.0** par some random account, avec la contribution de EierkuchenHD et VoidGod. Testeurs: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_. Traduction en français par jacktorrance_overlook.
 - **Script batch WerZatSong** par some random account, avec la logique de génération de fichiers basée sur la vitesse/le tempo développée par Mystic65.
 - **WerZatSong** par Nel, avec la contribution de Numerophobe, AzureBlast et Mystic65.

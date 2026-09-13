@@ -31,6 +31,9 @@ try:
     import concurrent.futures
     import ctypes
     from ctypes import wintypes
+    import contextlib
+    import io
+    import importlib
     import json
     import math
     import queue
@@ -43,6 +46,7 @@ try:
     import webbrowser
 
     import tkinter as tk
+    import tkinter.font as tkfont
     from tkinter import ttk, filedialog, messagebox
     from tkinter.scrolledtext import ScrolledText
 
@@ -146,14 +150,30 @@ GUI_STRINGS_FILE_PORTUGUÊS = os.path.join(ASSETS_FOLDER, "localizations", "gui_
 
 INTERNAL_INPUT_FOLDER = os.path.join(ASSETS_FOLDER, "input")
 INTERNAL_TEMP_FOLDER = os.path.join(ASSETS_FOLDER, "temp")
-PROCESSED_FILE = os.path.join(CUR_FOLDER, "PROCESSED.txt")
+# PROCESSED_DIR holds the two per-mode processed-songs JSON files (Quick and Long) plus the
+# PKLZ folder selection JSON. These replace the old single PROCESSED.txt: a song is listed in
+# a mode's JSON if it has already been scanned in that mode (or the user deliberately excluded
+# it), and any song not listed there is pending for that mode. LEGACY_PROCESSED_FILE is the old
+# file, kept on disk only for one-time migration (see migrate_legacy_processed_file()); once
+# migrated it is renamed to LEGACY_PROCESSED_FILE + ".migrated.bak" so it stops being an
+# ambiguous leftover sitting in the app folder.
+PROCESSED_DIR = os.path.join(ASSETS_FOLDER, "listsProcessed")
+PROCESSED_SONGS_QUICK_FILE = os.path.join(PROCESSED_DIR, "processed-songs-mode-quick.json")
+PROCESSED_SONGS_LONG_FILE = os.path.join(PROCESSED_DIR, "processed-songs-mode-long.json")
+PKLZ_FOLDERS_FILE = os.path.join(PROCESSED_DIR, "pklz-folders-to-process.json")
+LEGACY_PROCESSED_FILE = os.path.join(CUR_FOLDER, "PROCESSED.txt")
 TEMP_STAGING_DIRNAME = "___TEMP"
 
 DEFAULT_INPUT_DIR = os.path.join(CUR_FOLDER, "db_inputs")
 DEFAULT_DB_DIR = os.path.join(ASSETS_FOLDER, "database")
 DEFAULT_LOG_DIR = os.path.join(CUR_FOLDER, "logs")
+DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
+DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
+CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
+APP_VERSION = "2.0.0"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
+PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"
 LOSTWAVE_ITALIA_SONGS_URL = "https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy"
 FRENCH_LOSTWAVE_SONGS_URL = "https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520"
 USER_QLOSTWAVE_UPLOADS_URL = "https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW"
@@ -272,7 +292,15 @@ NEW_CONSOLE_FLAG = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
 # Config helpers
 # ============================================================================================
 
-def compute_werzatsong_cmd(config):
+def compute_werzatsong_cmd(config, pklz_folder_override=None):
+    """Builds the argv list passed to werzatsong.js. pklz_folder_override lets the
+    orchestrator force a specific PKLZ subfolder (or the full database) for a single pass
+    without touching config.json:
+        None  -> fall back to config's own only_use_fingerprint_subfolder / dirname
+                 (unchanged pre-rework behavior, used outside of an active scan)
+        ""    -> explicitly force a full-database search (no --folder flag at all)
+        "<x>" -> force --folder "<x>"
+    """
     cmd = ["cmd.exe", "/c", "node", r"assets\werzatsong.js"]
     if config.get("mode_musicbrainz"):
         cmd.append("--musicbrainz")
@@ -289,7 +317,18 @@ def compute_werzatsong_cmd(config):
         cmd.append("--shazam")
     if config.get("mode_audfprint"):
         cmd.append("--audfprint")
-        if config.get("only_use_fingerprint_subfolder"):
+        if pklz_folder_override is not None:
+            if pklz_folder_override != "":
+                # Two separate list elements, "--folder" and the plain folder name: subprocess
+                # itself adds the surrounding quotes when it assembles the final command-line
+                # string that Windows' CreateProcess sees, so we must NOT write quote
+                # characters inside the folder name here ourselves. Doing so would make the
+                # quotes part of the argument's VALUE instead of a string-assembly artifact,
+                # and node's argv parser would then look up a folder whose name literally
+                # starts with a stray '"' character and fail with a confusing "not found"
+                # error that has nothing to do with the folder actually being missing.
+                cmd.extend(["--folder", pklz_folder_override])
+        elif config.get("only_use_fingerprint_subfolder"):
             cmd.extend(["--folder", config.get("fingerprint_subfolder_dirname") or "default_subdir"])
         if config.get("use_custom_thread_count"):
             cmd.extend(["--threads", str(config.get("custom_thread_count_value") or "4")])
@@ -305,11 +344,20 @@ def default_config():
         "input_dir": DEFAULT_INPUT_DIR,
         "db_dir": DEFAULT_DB_DIR,
         "log_dir": DEFAULT_LOG_DIR,
+        "hash_tables_dir": DEFAULT_HASH_TABLES_DIR,
+        "console_logs_dir": DEFAULT_CONSOLE_LOGS_DIR,
         "mode_musicbrainz": True,
         "mode_audiotag": True,
         "mode_shazam": True,
         "mode_audfprint": True,
-        "generate_different_tempos": False,
+        # scan_mode is the three-way top-level mode switch that replaced the old boolean
+        # generate_different_tempos. It selects which search modes run in a given session:
+        #   "quick" -> only the original audio files are scanned (fast; this is the default,
+        #              matching the original generate_different_tempos=False)
+        #   "long"  -> only tempo/pitch variations (plus the original, for songs that have not
+        #              yet had a Quick pass) are scanned
+        #   "both"  -> Quick runs to completion first, then Long
+        "scan_mode": "quick",
         "negative_tempo_array": list(NEGATIVE_TEMPO_DEFAULT),
         "positive_tempo_array": list(POSITIVE_TEMPO_DEFAULT),
         "only_use_fingerprint_subfolder": False,
@@ -329,6 +377,15 @@ def default_config():
         "custom_musicbrainz_extension_value": MUSICBRAINZ_EXTENSION_DEFAULT,
         "theme_mode": "System",
         "language": "English",
+        "create_pklz_hash_tables_on_load_val": False,
+        # Copy/Move preference for the Add PKLZ Files.../Add Audio Files... dialogs. "move"
+        # (the default) copies the source into the destination, then deletes the original
+        # after a successful copy (see _is_safe_to_delete_source for the safety check that
+        # guards this). "copy" leaves the originals where they are, matching the pre-rework
+        # behavior. These two keys are independent and are written directly by each dialog's
+        # own radio group, not through _sync_widgets_to_config (see _prompt_files_or_folder).
+        "add_pklz_action": "move",
+        "add_audio_action": "move",
         "WERZATSONG_CMD": [],
     }
 
@@ -356,12 +413,37 @@ def validate_config(raw):
     result = default_config()
     if isinstance(raw, dict):
         bool_keys = ["mode_musicbrainz", "mode_audiotag", "mode_shazam", "mode_audfprint",
-                     "generate_different_tempos", "only_use_fingerprint_subfolder",
+                     "only_use_fingerprint_subfolder",
                      "use_custom_webhook_name", "use_custom_webhook_image", "use_custom_thread_count",
-                     "use_custom_search_depth", "custom_musicbrainz_duration_range", "custom_musicbrainz_extension"]
+                     "use_custom_search_depth", "custom_musicbrainz_duration_range", "custom_musicbrainz_extension",
+                     "create_pklz_hash_tables_on_load_val"]
         for key in bool_keys:
             if isinstance(raw.get(key), bool):
                 result[key] = raw[key]
+
+        # Migration from the old generate_different_tempos boolean happens before the ordinary
+        # scan_mode validation below: a config.json written by the pre-rework app has
+        # generate_different_tempos and no scan_mode, so this translates it once here, so
+        # existing users do not silently lose their Long-mode preference on first launch of the
+        # new version. A config that already has scan_mode (post-migration, or a fresh install)
+        # falls through to the ordinary validation and is left as-is.
+        if "scan_mode" not in raw and "generate_different_tempos" in raw:
+            legacy_gt = raw.get("generate_different_tempos")
+            if isinstance(legacy_gt, bool):
+                result["scan_mode"] = "long" if legacy_gt else "quick"
+
+        scan_val = raw.get("scan_mode")
+        if isinstance(scan_val, str) and scan_val in ("quick", "long", "both"):
+            result["scan_mode"] = scan_val
+
+        # Copy/Move preference for the two Add-files dialogs. See default_config()'s comment
+        # for the semantics. These are ordinary persistent keys; the only unusual thing about
+        # them is that they are written directly by a modal dialog's own trace callback rather
+        # than through _sync_widgets_to_config (see _prompt_files_or_folder).
+        for key in ("add_pklz_action", "add_audio_action"):
+            value = raw.get(key)
+            if isinstance(value, str) and value in ("copy", "move"):
+                result[key] = value
 
         str_keys = ["fingerprint_subfolder_dirname", "custom_webhook_name_value", "custom_webhook_image_link"]
         for key in str_keys:
@@ -377,7 +459,7 @@ def validate_config(raw):
         if isinstance(lang_val, str) and lang_val in ["English", "Italiano", "Français", "Português"]:
             result["language"] = lang_val
 
-        for key in ["input_dir", "db_dir", "log_dir"]:
+        for key in ["input_dir", "db_dir", "log_dir", "hash_tables_dir", "console_logs_dir"]:
             value = raw.get(key)
             if isinstance(value, str) and value.strip():
                 result[key] = value
@@ -511,6 +593,79 @@ def parse_tempo_list(text, fallback):
     except ValueError:
         return list(fallback)
     return values
+
+
+# ============================================================================================
+# Processed-songs / PKLZ-selection JSON helpers (assets/listsProcessed/*.json)
+# ============================================================================================
+# These replace the old single PROCESSED.txt with three small JSON files: one processed-songs
+# list per scan mode (Quick, Long), plus the PKLZ folder selection. All reads go through
+# load_json_file (never raises), and all writes go through atomic_write_json (write to a .tmp
+# file, then os.replace), so a crash or Force Stop mid-write can never leave a half-written,
+# corrupt JSON file on disk. The higher-level helpers that need self._log/self._tr/
+# self.config_data (load/save of the processed-songs sets, the PKLZ selection, and the legacy
+# migration) live as methods on WerZatSongGUI itself, further down.
+
+def load_json_file(path, default):
+    """Reads and parses a JSON file, returning `default` on any error: missing file,
+    unreadable file, or malformed JSON. Never raises."""
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def atomic_write_json(path, data):
+    """Writes `data` as JSON to `path` atomically: writes to `path + ".tmp"` first, then
+    os.replace()s it into place, so a reader never sees a half-written file and a crash mid-
+    write leaves the original file (if any) untouched. Creates the parent directory first
+    (idempotent, safe to call on every write) so the very first save on a fresh install does
+    not fail just because assets/listsProcessed/ doesn't exist yet. Returns True/False."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        os.replace(tmp_path, path)
+        return True
+    except Exception:
+        return False
+
+
+def atomic_write_json_staged(path, data):
+    """Same as atomic_write_json, but stops short of the os.replace(): only writes
+    `path + ".tmp"` and leaves it on disk. Paired with atomic_replace_staged(path), this lets a
+    caller stage several files first and only then commit all of them, so a multi-file
+    operation (see WerZatSongGUI._migrate_legacy_processed_file) is atomic as a unit instead of
+    as separate independent writes. Returns True/False."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
+        return True
+    except Exception:
+        return False
+
+
+def atomic_replace_staged(path):
+    """Commits a file previously staged by atomic_write_json_staged: os.replace()s
+    `path + ".tmp"` into `path`. Returns True/False. On failure, removes the leftover .tmp file
+    so it doesn't linger on disk and get mistaken for a fresh stage on a later run."""
+    tmp_path = path + ".tmp"
+    try:
+        os.replace(tmp_path, path)
+        return True
+    except Exception:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+        return False
 
 
 # ============================================================================================
@@ -948,13 +1103,27 @@ class WerZatSongGUI(tk.Tk):
         self.is_running = False
         self.pending_env = False
         self.show_state = {}
+        self.dir_vars = {}
         self.env_vars = {}
         self.env_show_frames = {}
         self.env_show_buttons = {}
         self.env_hide_buttons = {}
         self._env_dirty_keys = set()
         self.env_data = {}
-        self._pending_processed_lines = []
+
+        # None = use whatever config_data says (i.e. pre-orchestration behavior). "" = force
+        # a full-database search for this pass. "<x>" = force --folder "<x>" for this pass.
+        # See compute_werzatsong_cmd's pklz_folder_override and _run_pipeline.
+        self._runtime_pklz_folder = None
+        # Set for the whole duration of an orchestrated run so _save_config_to_disk() becomes
+        # a no-op: the temporary mode-toggle/folder-override state _run_pipeline flips into
+        # config_data must never land in config.json. See _save_config_to_disk.
+        self._suppress_config_saves = False
+        # Session-level state for the input_dir-mismatch prompt (_on_start_clicked). Reset to
+        # empty / all-writable at construction, not persisted across sessions: the prompt is
+        # meant to fire at most once per launch, not once ever.
+        self._mismatch_prompted = set()
+        self._processed_json_writable = {"quick": True, "long": True}
 
         # Translation related
         self._text_widgets = []  # (widget, key, kwargs)
@@ -974,6 +1143,12 @@ class WerZatSongGUI(tk.Tk):
         self.gui_strings = load_gui_strings(self.language)
         self.var_language = tk.StringVar(value=self.language)
         self.var_language.trace_add("write", self._make_language_trace())
+
+        # Runs before the UI is built (but after self.gui_strings exists, so any log line it
+        # emits is localized). On a fresh install there is nothing to migrate (no legacy
+        # PROCESSED.txt yet), so this is a no-op there, including on the first-time-setup path
+        # where the console doesn't exist yet to display it.
+        self._migrate_legacy_processed_file()
 
         self._boot()
 
@@ -1037,6 +1212,38 @@ class WerZatSongGUI(tk.Tk):
             self.title(self._tr("first_time_setup_title"))
         else:
             self.title(self._tr("app_title"))
+
+    def _set_env_command(self, env_key, value):
+        """Updates a command entry in the .env file and the in-memory env_data."""
+        self.env_data[env_key] = value
+        # Immediately persists to disk (same as _write_env_now, but without clearing all dirty keys)
+        try:
+            write_env_file(ENV_FILE, self.env_data)
+            self._env_dirty_keys.discard(env_key)   # remove from dirty set if present
+        except Exception as e:
+            messagebox.showerror(self._tr("error_title"), self._tr("env_write_error", error=e))
+
+    def _sync_env_from_disk_force(self):
+        """Reads the current .env file and force all in-memory data (and visible GUI fields)
+        to match it, discarding any unsaved edits. What is written in the file takes priority."""
+        disk_env = parse_env_file(ENV_FILE)
+        if not disk_env:
+            return  # File missing or unreadable. Nothing to do
+
+        # Overrides self.env_data completely with the file's content
+        self.env_data = disk_env
+        self._env_dirty_keys.clear()
+
+        # Updates the GUI fields for the API keys / webhook if they are currently shown
+        for key in REQUIRED_ENV_KEYS:
+            if key in self.env_vars:
+                value = disk_env.get(key, "")
+                if self.show_state.get(key):
+                    self._set_var_silently(self.env_vars[key], value)
+                # Even if not shown, keep the variable consistent so if the user later
+                # clicks "Show" they'll see the current file value.
+                else:
+                    self._set_var_silently(self.env_vars[key], value)
 
     def _change_language(self, lang):
         if lang not in ("English", "Italiano", "Français", "Português"):
@@ -1291,6 +1498,7 @@ class WerZatSongGUI(tk.Tk):
         self._build_advanced_section(bottom)
 
         self._enable_body_mousewheel()
+        self._enable_entry_shortcuts()
 
     def _build_scrollable_body(self, parent):
         """Wraps everything between the header and the action bar in a scrollable area, so
@@ -1345,9 +1553,14 @@ class WerZatSongGUI(tk.Tk):
         bind_tree(self._body_inner)
 
     def _build_console_section(self, parent):
-        frame = ttk.LabelFrame(parent, padding=6)
+        wrapper = tk.Frame(parent, height=180)
+        wrapper.pack(fill="both", expand=True, pady=(0, 6))
+        wrapper.pack_propagate(False)
+        self._console_wrapper = wrapper
+
+        frame = ttk.LabelFrame(wrapper, padding=6)
         self._add_text_widget(frame, "console_labelframe")
-        frame.pack(fill="both", expand=True, pady=(0, 6))
+        frame.pack(fill="both", expand=True)
         self._init_console(frame)
 
     def _create_collapsible_section(self, parent, title_key, default_expanded=False):
@@ -1467,6 +1680,31 @@ class WerZatSongGUI(tk.Tk):
                               "close_btn").pack(pady=(12, 0))
         top.grab_set()
 
+    def _show_selection_help_menu(self):
+        """The single "?" button next to the Select Songs.../Select PKLZ Folders... buttons
+        opens this small chooser instead of each button carrying its own separate "?" (which
+        used to leave one button stranded far to the right of an empty stretchy column). Picking
+        either option opens the normal _show_setting_help(key) popup on top of this one; Close
+        just dismisses the chooser."""
+        top = tk.Toplevel(self)
+        top.title(self._tr("selection_help_title"))
+        top.resizable(False, False)
+        top.transient(self)
+
+        frame = ttk.Frame(top, padding=15)
+        frame.pack(fill="both", expand=True)
+        self._add_text_widget(
+            ttk.Button(frame, command=lambda: self._show_setting_help("song_selection_help")),
+            "select_songs_btn"
+        ).pack(fill="x", pady=2)
+        self._add_text_widget(
+            ttk.Button(frame, command=lambda: self._show_setting_help("pklz_folder_selection_help")),
+            "select_pklz_folders_btn"
+        ).pack(fill="x", pady=2)
+        self._add_text_widget(ttk.Button(frame, command=top.destroy),
+                              "close_btn").pack(fill="x", pady=(12, 0))
+        top.grab_set()
+
     def _build_modes_section(self, parent):
         frame = ttk.LabelFrame(parent, padding=8)
         self._add_text_widget(frame, "search_modes")
@@ -1505,6 +1743,9 @@ class WerZatSongGUI(tk.Tk):
         self._build_audfprint_tab(notebook)
         self._build_musicbrainz_tab(notebook)
         self._build_discord_tab(notebook)
+        self._build_hash_tables_tab(notebook)
+        self._build_logs_tab(notebook)
+        self._build_env_tab(notebook)
 
     def _build_general_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
@@ -1512,26 +1753,51 @@ class WerZatSongGUI(tk.Tk):
         self._notebook_tabs.append((notebook, frame, "general_tab"))
         frame.columnconfigure(2, weight=1)
 
-        self._add_help_button(frame, 0, "mark_all_audio_files_as_processed")
-        self._add_text_widget(ttk.Label(frame, text=""), "mark_all_audio_label").grid(row=0, column=1, sticky="w", pady=2)
+        # Song Selection / PKLZ Folder Selection: replace the old "Mark all audio files as
+        # processed in" buttons (which overwrote PROCESSED.txt wholesale) with two dialogs, one
+        # per-song, one per-PKLZ-subfolder. Both buttons sit side by side in their own row,
+        # above Scan Mode, with a single combined "?" button to their left: the popup it opens
+        # lets the user pick which of the two explanations to read (see
+        # _show_selection_help_menu), rather than duplicating a separate "?" button per
+        # selection button, which used to leave one of the two buttons stranded far to the
+        # right of an empty stretchy column.
+        help_btn = ttk.Button(frame, text="?", width=2, command=self._show_selection_help_menu)
+        help_btn.grid(row=0, column=0, sticky="w", padx=(0, 3), pady=2)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=0, column=2, sticky="w", padx=4)
-        self._add_text_widget(ttk.Button(btn_frame, command=lambda: self._mark_all_processed("quick")),
-                              "quick_mode_btn").pack(side="left", padx=2)
-        self._add_text_widget(ttk.Button(btn_frame, command=lambda: self._mark_all_processed("long")),
-                              "long_mode_btn").pack(side="left", padx=2)
-        self._add_text_widget(ttk.Button(btn_frame, command=lambda: self._mark_all_processed("both")),
-                              "both_modes_btn").pack(side="left", padx=2)
+        selection_frame = ttk.Frame(frame)
+        selection_frame.grid(row=0, column=1, columnspan=2, sticky="w", padx=4)
+        self._add_text_widget(ttk.Button(selection_frame, command=self._open_song_selection_menu),
+                              "select_songs_btn").pack(side="left", padx=(0, 6))
+        self._add_text_widget(ttk.Button(selection_frame, command=self._open_pklz_selection_menu),
+                              "select_pklz_folders_btn").pack(side="left")
 
-        self._add_help_button(frame, 1, "theme_mode")
-        self._add_text_widget(ttk.Label(frame, text=""), "theme_label").grid(row=1, column=1, sticky="w", pady=2)
+        # Scan Mode: the reworked replacement for the old boolean generate_different_tempos
+        # checkbox, now a three-way choice deciding which search modes actually run this
+        # session. See the "scan_mode" explanation key in advanced_setting_explanations_*.json
+        # (behind the "?" button here) for the full semantics of each option.
+        self._add_help_button(frame, 1, "scan_mode")
+        self._add_text_widget(ttk.Label(frame, text=""), "scan_mode_label").grid(row=1, column=1, sticky="w", pady=2)
+
+        self.var_scan_mode = tk.StringVar(value=self.config_data.get("scan_mode", "quick"))
+        self.var_scan_mode.trace_add("write", self._make_simple_trace())
+
+        scan_mode_frame = ttk.Frame(frame)
+        scan_mode_frame.grid(row=1, column=2, sticky="w", padx=4)
+        self._add_text_widget(ttk.Radiobutton(scan_mode_frame, variable=self.var_scan_mode, value="quick"),
+                              "scan_mode_quick").pack(side="left", padx=2)
+        self._add_text_widget(ttk.Radiobutton(scan_mode_frame, variable=self.var_scan_mode, value="long"),
+                              "scan_mode_long").pack(side="left", padx=2)
+        self._add_text_widget(ttk.Radiobutton(scan_mode_frame, variable=self.var_scan_mode, value="both"),
+                              "scan_mode_both").pack(side="left", padx=2)
+
+        self._add_help_button(frame, 2, "theme_mode")
+        self._add_text_widget(ttk.Label(frame, text=""), "theme_label").grid(row=2, column=1, sticky="w", pady=2)
 
         self.var_theme_mode = tk.StringVar(value=self.config_data.get("theme_mode", "System"))
         self.var_theme_mode.trace_add("write", self._make_theme_trace())
 
         theme_frame = ttk.Frame(frame)
-        theme_frame.grid(row=1, column=2, sticky="w", padx=4)
+        theme_frame.grid(row=2, column=2, sticky="w", padx=4)
         self._add_text_widget(ttk.Radiobutton(theme_frame, variable=self.var_theme_mode, value="Light"),
                               "light_theme").pack(side="left", padx=2)
         self._add_text_widget(ttk.Radiobutton(theme_frame, variable=self.var_theme_mode, value="Dark"),
@@ -1540,11 +1806,11 @@ class WerZatSongGUI(tk.Tk):
                               "system_theme").pack(side="left", padx=2)
 
         # Language selection
-        self._add_help_button(frame, 2, "language")
-        self._add_text_widget(ttk.Label(frame, text=""), "language_label").grid(row=2, column=1, sticky="w", pady=2)
+        self._add_help_button(frame, 3, "language")
+        self._add_text_widget(ttk.Label(frame, text=""), "language_label").grid(row=3, column=1, sticky="w", pady=2)
 
         lang_frame = ttk.Frame(frame)
-        lang_frame.grid(row=2, column=2, sticky="w", padx=4)
+        lang_frame.grid(row=3, column=2, sticky="w", padx=4)
         self._add_text_widget(ttk.Radiobutton(lang_frame, variable=self.var_language, value="English"),
                               "english_lang").pack(side="left", padx=2)
         self._add_text_widget(ttk.Radiobutton(lang_frame, variable=self.var_language, value="Italiano"),
@@ -1572,34 +1838,27 @@ class WerZatSongGUI(tk.Tk):
         self._notebook_tabs.append((notebook, frame, "audfprint_tab"))
         frame.columnconfigure(2, weight=1)
 
-        self._add_help_button(frame, 0, "fingerprint_subfolder")
-        self.var_use_subfolder = tk.BooleanVar(value=self.config_data["only_use_fingerprint_subfolder"])
-        self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_use_subfolder,
-                                               command=self._flush_immediately),
-                              "use_subfolder_check").grid(row=0, column=1, sticky="w", pady=2)
-        self.var_subfolder_name = tk.StringVar(value=self.config_data["fingerprint_subfolder_dirname"])
-        self.var_subfolder_name.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_subfolder_name, width=20).grid(row=0, column=2, sticky="ew", padx=4)
-        self._add_text_widget(ttk.Button(frame, command=self._browse_subfolder),
-                              "browse_btn").grid(row=0, column=3, sticky="w")
-
-        self._add_help_button(frame, 1, "thread_count")
+        # Picking specific PKLZ subfolders now happens through the "Select PKLZ Folders..."
+        # button on the General tab (see _open_pklz_selection_menu), not here: that dialog can
+        # select several subfolders at once (this tab's old checkbox only ever supported one),
+        # and its own "?" help button explains the multi-target regeneration trade-off.
+        self._add_help_button(frame, 0, "thread_count")
         self.var_use_threads = tk.BooleanVar(value=self.config_data["use_custom_thread_count"])
         self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_use_threads,
                                                command=self._flush_immediately),
-                              "thread_count_check").grid(row=1, column=1, sticky="w", pady=2)
+                              "thread_count_check").grid(row=0, column=1, sticky="w", pady=2)
         self.var_thread_count = tk.StringVar(value=self.config_data["custom_thread_count_value"])
         self.var_thread_count.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_thread_count, width=6).grid(row=1, column=2, sticky="w", padx=4)
+        ttk.Entry(frame, textvariable=self.var_thread_count, width=6).grid(row=0, column=2, sticky="w", padx=4)
 
-        self._add_help_button(frame, 2, "search_depth")
+        self._add_help_button(frame, 1, "search_depth")
         self.var_use_search_depth = tk.BooleanVar(value=self.config_data["use_custom_search_depth"])
         self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_use_search_depth,
                                                command=self._flush_immediately),
-                              "search_depth_check").grid(row=2, column=1, sticky="w", pady=2)
+                              "search_depth_check").grid(row=1, column=1, sticky="w", pady=2)
         self.var_search_depth = tk.StringVar(value=str(self.config_data["custom_search_depth_value"]))
         self.var_search_depth.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_search_depth, width=6).grid(row=2, column=2, sticky="w", padx=4)
+        ttk.Entry(frame, textvariable=self.var_search_depth, width=6).grid(row=1, column=2, sticky="w", padx=4)
 
     def _build_musicbrainz_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
@@ -1659,29 +1918,157 @@ class WerZatSongGUI(tk.Tk):
         self.var_custom_image.trace_add("write", self._make_simple_trace())
         ttk.Entry(frame, textvariable=self.var_custom_image).grid(row=1, column=2, sticky="ew", padx=4)
 
+    def _build_env_tab(self, notebook):
+        """Tab that lets the user choose the command format for Python, FFmpeg and Node."""
+        frame = ttk.Frame(notebook, padding=8)
+        notebook.add(frame, text=self._tr("env_tab"))
+        self._notebook_tabs.append((notebook, frame, "env_tab"))
+        frame.columnconfigure(2, weight=1)
+
+        def get_full_path(cmd_name):
+            path = shutil.which(cmd_name)
+            if not path:
+                path = cmd_name
+            return f'"{path}"'
+
+        rows = [
+            (
+                "PYTHON_COMMAND",
+                "python_command_label",
+                "python",
+                sys.executable,
+                "use_python_btn",
+                "use_python_fullpath_btn",
+                "python_command"
+            ),
+            (
+                "FFMPEG_COMMAND",
+                "ffmpeg_command_label",
+                "ffmpeg",
+                get_full_path("ffmpeg"),
+                "use_ffmpeg_btn",
+                "use_ffmpeg_fullpath_btn",
+                "ffmpeg_command"
+            ),
+            (
+                "NODE_COMMAND",
+                "node_command_label",
+                "node",
+                get_full_path("node"),
+                "use_node_btn",
+                "use_node_fullpath_btn",
+                "node_command"
+            ),
+        ]
+
+        for row_idx, (env_key, label_key, simple, full, simple_btn_key, full_btn_key, help_key) in enumerate(rows):
+            self._add_help_button(frame, row_idx, help_key, column=0)
+
+            self._add_text_widget(ttk.Label(frame, text=""), label_key).grid(
+                row=row_idx, column=1, sticky="w", pady=2, padx=(3, 6)
+            )
+
+            btn_frame = ttk.Frame(frame)
+            btn_frame.grid(row=row_idx, column=2, sticky="w", padx=4)
+
+            # Uses _add_text_widget for both buttons so they get registered and translated
+            btn_simple = self._add_text_widget(ttk.Button(btn_frame), simple_btn_key)
+            btn_simple.config(command=lambda k=env_key, v=simple: self._set_env_command(k, v))
+            btn_simple.pack(side="left", padx=2)
+
+            btn_full = self._add_text_widget(ttk.Button(btn_frame), full_btn_key)
+            btn_full.config(command=lambda k=env_key, v=full: self._set_env_command(k, v))
+            btn_full.pack(side="left", padx=2)
+
+    def _build_hash_tables_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=8)
+        notebook.add(frame, text=self._tr("hash_tables_tab"))
+        self._notebook_tabs.append((notebook, frame, "hash_tables_tab"))
+        frame.columnconfigure(2, weight=1)
+
+        self._add_help_button(frame, 0, "hash_tables_dir")
+        self._add_text_widget(ttk.Label(frame, text=""), "hash_tables_dir_label").grid(
+            row=0, column=1, sticky="w", pady=2, padx=(3, 6))
+
+        var = tk.StringVar(value=self.config_data.get("hash_tables_dir", DEFAULT_HASH_TABLES_DIR))
+        self.dir_vars["hash_tables_dir"] = var
+        var.trace_add("write", self._make_dir_trace("hash_tables_dir"))
+        ttk.Entry(frame, textvariable=var, width=40).grid(row=0, column=2, sticky="ew", padx=6)
+        self._add_text_widget(ttk.Button(frame, command=lambda: self._open_directory("hash_tables_dir")),
+                            "open_btn").grid(row=0, column=3, padx=3)
+        self._add_text_widget(ttk.Button(frame, command=lambda: self._browse_directory("hash_tables_dir")),
+                            "browse_btn").grid(row=0, column=4, padx=3)
+
+        self._add_help_button(frame, 1, "create_hash_tables_explanation")
+        self.var_create_pklz_ht = tk.BooleanVar(
+            value=self.config_data.get("create_pklz_hash_tables_on_load_val", False))
+        self._add_text_widget(
+            ttk.Checkbutton(frame, variable=self.var_create_pklz_ht,
+                            command=self._flush_immediately),
+            "create_pklz_hash_tables_on_load"
+        ).grid(row=1, column=1, columnspan=3, sticky="w", pady=2, padx=(3, 0))
+
+    def _build_logs_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=8)
+        notebook.add(frame, text=self._tr("logs_tab"))
+        self._notebook_tabs.append((notebook, frame, "logs_tab"))
+        frame.columnconfigure(2, weight=1)
+
+        self._add_help_button(frame, 0, "console_logs_dir")
+        self._add_text_widget(ttk.Label(frame, text=""), "console_logs_dir_label").grid(
+            row=0, column=1, sticky="w", pady=2, padx=(3, 6))
+
+        console_logs_default = self.config_data.get("console_logs_dir", DEFAULT_CONSOLE_LOGS_DIR)
+        # Display-only drive-letter normalization: Windows is case-insensitive for paths, so
+        # "c:\..." and "C:\..." point at the exact same folder, but every other default
+        # directory here happens to render as "C:\...". Uppercases just the drive letter for
+        # visual consistency. The change also persists (via the StringVar's own trace) into
+        # config.json, which is harmless because the path is identical either way.
+        if len(console_logs_default) >= 2 and console_logs_default[1] == ":":
+            console_logs_default = console_logs_default[0].upper() + console_logs_default[1:]
+
+        var = tk.StringVar(value=console_logs_default)
+        self.dir_vars["console_logs_dir"] = var
+        var.trace_add("write", self._make_dir_trace("console_logs_dir"))
+        ttk.Entry(frame, textvariable=var, width=40).grid(row=0, column=2, sticky="ew", padx=6)
+        self._add_text_widget(ttk.Button(frame, command=lambda: self._open_directory("console_logs_dir")),
+                            "open_btn").grid(row=0, column=3, padx=3)
+        self._add_text_widget(ttk.Button(frame, command=lambda: self._browse_directory("console_logs_dir")),
+                            "browse_btn").grid(row=0, column=4, padx=3)
+
+        self._add_help_button(frame, 1, "print_console_to_log")
+        self._add_text_widget(
+            ttk.Button(frame, command=self._save_console_log),
+            "print_console_to_log_btn"
+        ).grid(row=1, column=1, columnspan=3, sticky="w", pady=2, padx=(3, 0))
+
+        self._add_text_widget(
+            ttk.Button(frame, command=self._open_crash_logs_file),
+            "open_crash_logs_btn"
+        ).grid(row=2, column=0, columnspan=4, sticky="w", pady=2)
+
+        self._logs_tab_frame = frame
+
     def _build_tempo_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
         notebook.add(frame, text=self._tr("long_mode_tab"))
         self._notebook_tabs.append((notebook, frame, "long_mode_tab"))
         frame.columnconfigure(2, weight=1)
 
-        self._add_help_button(frame, 0, "generate_different_tempos")
-        self.var_gen_tempos = tk.BooleanVar(value=self.config_data["generate_different_tempos"])
-        self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_gen_tempos,
-                                               command=self._flush_immediately),
-                              "enable_long_mode_check").grid(row=0, column=1, columnspan=2, sticky="w", pady=2)
-
-        self._add_help_button(frame, 1, "negative_tempo_array")
-        self._add_text_widget(ttk.Label(frame, text=""), "negative_tempo_label").grid(row=1, column=1, sticky="w", pady=2)
+        # Whether Long Mode runs at all this session is now decided by the Scan Mode switch on
+        # the General tab (see _build_general_tab / self.var_scan_mode), not by a checkbox
+        # here: this tab now only controls which variations get generated when it does run.
+        self._add_help_button(frame, 0, "negative_tempo_array")
+        self._add_text_widget(ttk.Label(frame, text=""), "negative_tempo_label").grid(row=0, column=1, sticky="w", pady=2)
         self.var_negative_tempos = tk.StringVar(value=format_tempo_list(self.config_data["negative_tempo_array"]))
         self.var_negative_tempos.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_negative_tempos).grid(row=1, column=2, sticky="ew", pady=2)
+        ttk.Entry(frame, textvariable=self.var_negative_tempos).grid(row=0, column=2, sticky="ew", pady=2)
 
-        self._add_help_button(frame, 2, "positive_tempo_array")
-        self._add_text_widget(ttk.Label(frame, text=""), "positive_tempo_label").grid(row=2, column=1, sticky="w", pady=2)
+        self._add_help_button(frame, 1, "positive_tempo_array")
+        self._add_text_widget(ttk.Label(frame, text=""), "positive_tempo_label").grid(row=1, column=1, sticky="w", pady=2)
         self.var_positive_tempos = tk.StringVar(value=format_tempo_list(self.config_data["positive_tempo_array"]))
         self.var_positive_tempos.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_positive_tempos).grid(row=2, column=2, sticky="ew", pady=2)
+        ttk.Entry(frame, textvariable=self.var_positive_tempos).grid(row=1, column=2, sticky="ew", pady=2)
 
     def _build_action_bar(self, parent):
         bar = ttk.Frame(parent)
@@ -1702,7 +2089,7 @@ class WerZatSongGUI(tk.Tk):
         self.btn_add_audio = ttk.Button(right, command=lambda: self._add_files_flow("audio"))
         self._add_text_widget(self.btn_add_audio, "add_audio_btn")
         self.btn_add_audio.pack(side="left", padx=4)
-        self._add_text_widget(ttk.Button(right, command=self._open_processed_file),
+        self._add_text_widget(ttk.Button(right, command=self._open_processed_folder),
                               "processed_files_btn").pack(side="left", padx=4)
         self.btn_force_stop = tk.Button(right, command=self._on_force_stop_clicked,
                                          fg="#b91c1c", font=("Segoe UI", 9, "bold"), state="disabled")
@@ -1712,51 +2099,6 @@ class WerZatSongGUI(tk.Tk):
                                     fg="#1a56db", font=("Segoe UI", 9, "bold"))
         self._add_text_widget(self.btn_start, "start_btn")
         self.btn_start.pack(side="left", padx=(4, 0))
-
-    # ------------------------------------------------------------------
-    # Mark all as PROCESSED logic
-    # ------------------------------------------------------------------
-
-    def _mark_all_processed(self, mode):
-        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
-        if not os.path.exists(input_dir):
-            messagebox.showerror(self._tr("error_title"),
-                                 self._tr("input_dir_not_found", dir=input_dir))
-            return
-
-        all_targets = []
-        for root, dirs, files in os.walk(input_dir):
-            if TEMP_STAGING_DIRNAME in dirs:
-                dirs.remove(TEMP_STAGING_DIRNAME)
-
-            dirs.sort()
-            files.sort()
-
-            for file in files:
-                if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
-                    full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, input_dir)
-                    all_targets.append(rel_path)
-
-        if not all_targets:
-            messagebox.showinfo(self._tr("info_title"), self._tr("mark_all_no_audio"))
-            return
-
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(PROCESSED_FILE)), exist_ok=True)
-            with open(PROCESSED_FILE, "w", encoding="utf-8") as f:
-                for rel_path in all_targets:
-                    if mode == "quick":
-                        f.write(f"{rel_path}|quick\n")
-                    elif mode == "long":
-                        f.write(f"{rel_path}|long\n")
-                    elif mode == "both":
-                        f.write(f"{rel_path}|long\n{rel_path}|quick\n")
-            messagebox.showinfo(self._tr("success_title"),
-                                self._tr("mark_all_success", count=len(all_targets), mode=mode.title()))
-        except Exception as e:
-            messagebox.showerror(self._tr("error_title"),
-                                 self._tr("mark_all_error", error=e))
 
     # ------------------------------------------------------------------
     # Console widget (interactive terminal emulation)
@@ -1770,6 +2112,15 @@ class WerZatSongGUI(tk.Tk):
         self.console.pack(fill="both", expand=True)
         self.console.mark_set("input_start", "end")
         self.console.mark_gravity("input_start", "left")
+        # Copy / Select All / right-click context menu
+        self.console.bind("<Button-3>", self._console_context_menu)
+        # Ctrl+X -> copy (never cut)
+        self.console.bind("<Control-x>", self._console_copy_event)
+        self.console.bind("<Control-X>", self._console_copy_event)
+        # Ctrl+A -> select all
+        self.console.bind("<Control-a>", self._console_select_all_event)
+        self.console.bind("<Control-A>", self._console_select_all_event)
+        # Return, BackSpace, Key
         self.console.bind("<Return>", self._console_return)
         self.console.bind("<BackSpace>", self._console_backspace)
         self.console.bind("<Key>", self._console_key_press)
@@ -1797,8 +2148,22 @@ class WerZatSongGUI(tk.Tk):
         self.after(40, self._pump_console_queue)
 
     def _set_console_font_size(self, size):
-        self.console_font_size = max(CONSOLE_FONT_MIN, min(CONSOLE_FONT_MAX, size))
-        self.console.configure(font=(CONSOLE_FONT_FAMILY, self.console_font_size))
+        new_size = max(CONSOLE_FONT_MIN, min(CONSOLE_FONT_MAX, size))
+        if new_size == getattr(self, "console_font_size", CONSOLE_FONT_DEFAULT):
+            return
+
+        old_font = tkfont.Font(family=CONSOLE_FONT_FAMILY, size=self.console_font_size)
+        new_font = tkfont.Font(family=CONSOLE_FONT_FAMILY, size=new_size)
+        old_line_h = max(1, old_font.metrics("linespace"))
+        new_line_h = max(1, new_font.metrics("linespace"))
+        try:
+            old_lines = int(self.console.cget("height"))
+        except (tk.TclError, ValueError):
+            old_lines = 11
+        new_lines = max(2, round(old_lines * old_line_h / new_line_h))
+
+        self.console_font_size = new_size
+        self.console.configure(font=(CONSOLE_FONT_FAMILY, new_size), height=new_lines)
 
     def _console_zoom_wheel(self, event):
         self._set_console_font_size(self.console_font_size + (1 if event.delta > 0 else -1))
@@ -1929,9 +2294,11 @@ class WerZatSongGUI(tk.Tk):
         try:
             while True:
                 text = self.console_queue.get_nowait()
+                at_bottom = self._console_is_at_bottom()
                 self._insert_console_text(text)
                 self.console.mark_set("input_start", "end")
-                self.console.see("end")
+                if at_bottom:
+                    self.console.see("end")
         except queue.Empty:
             pass
         self.after(40, self._pump_console_queue)
@@ -2070,13 +2437,16 @@ class WerZatSongGUI(tk.Tk):
         c["mode_audiotag"] = bool(self.var_mode_audiotag.get())
         c["mode_shazam"] = bool(self.var_mode_shazam.get())
         c["mode_audfprint"] = bool(self.var_mode_audfprint.get())
-        c["generate_different_tempos"] = bool(self.var_gen_tempos.get())
+        # scan_mode is backed by a long-lived widget (the radio group in the General tab), so
+        # it goes through the ordinary debounced flush like every other setting here. This is
+        # unlike add_pklz_action/add_audio_action, which are written directly by their modal
+        # dialogs' own trace callbacks (see _prompt_files_or_folder): those widgets only exist
+        # while their dialog is open, so there is nothing for this method to read.
+        c["scan_mode"] = self.var_scan_mode.get()
         c["negative_tempo_array"] = parse_tempo_list(self.var_negative_tempos.get(),
                                                       c.get("negative_tempo_array", NEGATIVE_TEMPO_DEFAULT))
         c["positive_tempo_array"] = parse_tempo_list(self.var_positive_tempos.get(),
                                                       c.get("positive_tempo_array", POSITIVE_TEMPO_DEFAULT))
-        c["only_use_fingerprint_subfolder"] = bool(self.var_use_subfolder.get())
-        c["fingerprint_subfolder_dirname"] = self.var_subfolder_name.get().strip() or "default_subdir"
         c["use_custom_webhook_name"] = bool(self.var_use_custom_name.get())
         c["custom_webhook_name_value"] = self.var_custom_name.get()
         c["use_custom_webhook_image"] = bool(self.var_use_custom_image.get())
@@ -2101,20 +2471,222 @@ class WerZatSongGUI(tk.Tk):
             MUSICBRAINZ_EXTENSION_DEFAULT)
         c["theme_mode"] = self.var_theme_mode.get()
         c["language"] = self.var_language.get()
-        for key in ("input_dir", "db_dir", "log_dir"):
+        c["create_pklz_hash_tables_on_load_val"] = bool(self.var_create_pklz_ht.get())
+        for key in ("input_dir", "db_dir", "log_dir", "hash_tables_dir", "console_logs_dir"):
             value = self.dir_vars[key].get().strip()
             c[key] = value or default_config()[key]
         c["envfile_dir"] = ENV_FILE
         c["envfile_example_dir"] = ENV_EXAMPLE_FILE
 
     def _recompute_command(self):
-        self.config_data["WERZATSONG_CMD"] = compute_werzatsong_cmd(self.config_data)
+        self.config_data["WERZATSONG_CMD"] = compute_werzatsong_cmd(
+            self.config_data, pklz_folder_override=self._runtime_pklz_folder)
 
     def _save_config_to_disk(self):
+        if self._suppress_config_saves:
+            # During orchestration we may temporarily hold runtime-only state (the additional-
+            # modes toggles, the PKLZ folder override) in config_data that must never land in
+            # config.json. Skipping the write here is intentional; _run_pipeline's finally
+            # block restores the real values before this flag is ever cleared.
+            return
         save_config(self.config_data)
 
     def _sync_webhook_js(self):
         sync_webhook_js(self.config_data)
+
+    # ------------------------------------------------------------------
+    # Processed songs / PKLZ selection (assets/listsProcessed/*.json)
+    # ------------------------------------------------------------------
+
+    def _processed_songs_path(self, mode):
+        return PROCESSED_SONGS_QUICK_FILE if mode == "quick" else PROCESSED_SONGS_LONG_FILE
+
+    def _processed_json_input_dir_mismatch(self, path):
+        """Returns (mismatch_bool, stored_input_dir) for the processed-songs JSON at `path`.
+        mismatch_bool is True only when the file exists, is a well-formed dict, has a
+        non-empty stored input_dir, and that input_dir differs (case-insensitively, path-
+        normalized) from the currently configured one. Shared by _load_processed_songs,
+        _save_processed_songs, and _rewrite_processed_json_extensions so all three consult
+        exactly the same guard, per the "input_dir mismatch" edge case."""
+        existing = load_json_file(path, None)
+        if not isinstance(existing, dict):
+            return False, ""
+        stored_input_dir = existing.get("input_dir") or ""
+        if not stored_input_dir:
+            return False, ""
+        current_input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        mismatch = (os.path.normcase(os.path.normpath(stored_input_dir))
+                    != os.path.normcase(os.path.normpath(current_input_dir)))
+        return mismatch, stored_input_dir
+
+    def _load_processed_songs(self, mode):
+        """Returns (processed_set, input_dir_mismatch_bool) for the given mode ("quick" or
+        "long"). If the JSON's stored input_dir differs from the currently configured one, the
+        processed list is ignored (an empty set is returned instead), so we never treat a song
+        as already scanned just because it happens to share a relative path with something
+        scanned under a different input folder. A [WARNING]-tagged line is logged via _log()
+        every single time this is called on a mismatched file, not just once per session: the
+        one-shot user-facing prompt lives in _on_start_clicked, not here."""
+        path = self._processed_songs_path(mode)
+        data = load_json_file(path, None)
+        mismatch, stored_input_dir = self._processed_json_input_dir_mismatch(path)
+        if mismatch:
+            current_input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+            self._log(self._tr("log_input_dir_mismatch_read", file=path,
+                                old_dir=stored_input_dir, new_dir=current_input_dir))
+            return set(), True
+        # A file that exists but failed to parse (or parsed to something other than a dict)
+        # comes back as None from load_json_file: treat it the same as "missing", but log a
+        # warning so a corrupt JSON on disk doesn't silently masquerade as "nothing processed
+        # yet" without a trace in the console.
+        if data is None and os.path.exists(path):
+            self._log(self._tr("invalid_processed_json", file=path))
+        processed_list = data.get("processed") if isinstance(data, dict) else None
+        if not isinstance(processed_list, list):
+            processed_list = []
+        return set(processed_list), False
+
+    def _save_processed_songs(self, mode, processed_set):
+        """Atomically writes the processed-songs JSON for `mode`. Refuses to overwrite a file
+        whose stored input_dir differs from the current one (logging a [WARNING]-tagged line
+        via _log() every time the refusal happens): the stored paths may still be valid
+        relative to that file's own input_dir (e.g. the user moved the input folder and will
+        move it back), and blindly overwriting it with only this session's completions would
+        destroy that history. The one-shot Tk prompt in _on_start_clicked offers to reset the
+        file instead. Also prunes entries that no longer exist on disk, but only when the write
+        actually proceeds (i.e. only when the mismatch check passes). Returns True/False."""
+        path = self._processed_songs_path(mode)
+        mismatch, stored_input_dir = self._processed_json_input_dir_mismatch(path)
+        current_input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        if mismatch:
+            self._log(self._tr("log_input_dir_mismatch_write", file=path,
+                                old_dir=stored_input_dir, new_dir=current_input_dir))
+            return False
+        pruned = {rel for rel in processed_set if os.path.exists(os.path.join(current_input_dir, rel))}
+        data = {"version": 1, "mode": mode, "input_dir": current_input_dir, "processed": sorted(pruned)}
+        return atomic_write_json(path, data)
+
+    def _load_pklz_selection(self):
+        """Returns (use_full_database, folders, db_dir_mismatch_bool). Missing/malformed JSON
+        falls back to "use the full database". A mismatched database_dir (the folder moved, or
+        db_dir was reconfigured) does not block anything: the stored folder names are still
+        tried relative to the *current* db_dir, since PKLZ subfolder names are typically still
+        valid after such a move, and there is no data-loss risk either way, so unlike the
+        processed-songs mismatch there is no reset prompt here, just a log warning."""
+        default = {"version": 1, "database_dir": "", "use_full_database": True, "folders": []}
+        data = load_json_file(PKLZ_FOLDERS_FILE, None)
+        if not isinstance(data, dict):
+            if data is None and os.path.exists(PKLZ_FOLDERS_FILE):
+                self._log(self._tr("invalid_pklz_json", file=PKLZ_FOLDERS_FILE))
+            data = default
+        use_full = bool(data.get("use_full_database", True))
+        folders = data.get("folders")
+        if not isinstance(folders, list) or not all(isinstance(f, str) for f in folders):
+            folders = []
+        stored_db_dir = data.get("database_dir") or ""
+        current_db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
+        mismatch = bool(stored_db_dir) and (os.path.normcase(os.path.normpath(stored_db_dir))
+                                             != os.path.normcase(os.path.normpath(current_db_dir)))
+        if mismatch:
+            self._log(self._tr("log_db_dir_mismatch", file=PKLZ_FOLDERS_FILE,
+                                old_dir=stored_db_dir, new_dir=current_db_dir))
+        return use_full, folders, mismatch
+
+    def _save_pklz_selection(self, use_full, folders):
+        current_db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
+        data = {"version": 1, "database_dir": current_db_dir,
+                "use_full_database": bool(use_full), "folders": list(folders)}
+        return atomic_write_json(PKLZ_FOLDERS_FILE, data)
+
+    def _migrate_legacy_processed_file(self):
+        """One-time migration from the old single PROCESSED.txt (bare "path", "path|quick", or
+        "path|long" lines) to the two new processed-songs JSON files. Called once from
+        __init__, after self.gui_strings is loaded (so the log line is localized) but before
+        the UI is built.
+
+        Atomicity of the two writes, as a unit: a naive "write Quick JSON, then write Long
+        JSON" sequence could leave the two files in a half-migrated state if the process dies
+        (or the disk fills) between the two os.replace() calls. To avoid that, both files are
+        staged first (atomic_write_json_staged, which only writes the .tmp file) and only then
+        committed with two back-to-back os.replace() calls (atomic_replace_staged).
+
+        Recovery note, worth keeping as a comment so a future maintainer does not "fix" this:
+        if this launch's SECOND os.replace() fails after the first one already succeeded, the
+        legacy PROCESSED.txt is still on disk (it is only ever renamed after BOTH replaces
+        succeed, see below). On the next launch, the "do both JSONs already exist" check below
+        will either find Long missing (and safely re-migrate from the still-present legacy
+        file, overwriting the stale partial Quick JSON with an identical fresh one) or find
+        Long present-but-stale (in which case the early-return path below renames the legacy
+        file to .migrated.bak and leaves the stale Long JSON alone). Either outcome is safe:
+        no state where data is lost is reachable, since the legacy file is only ever removed
+        (via rename) once both JSONs are confirmed written.
+        """
+        quick_exists = os.path.exists(PROCESSED_SONGS_QUICK_FILE)
+        long_exists = os.path.exists(PROCESSED_SONGS_LONG_FILE)
+        legacy_exists = os.path.exists(LEGACY_PROCESSED_FILE)
+
+        if quick_exists and long_exists:
+            if legacy_exists:
+                try:
+                    os.replace(LEGACY_PROCESSED_FILE, LEGACY_PROCESSED_FILE + ".migrated.bak")
+                except Exception:
+                    pass
+            return
+
+        if not legacy_exists:
+            return
+
+        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        quick_processed = set()
+        long_processed = set()
+        try:
+            with open(LEGACY_PROCESSED_FILE, "r", encoding="utf-8") as f:
+                lines = [line.strip() for line in f if line.strip()]
+        except Exception as e:
+            self._log(self._tr("log_migration_read_error", error=e))
+            return
+
+        for line in lines:
+            if line.endswith("|quick"):
+                quick_processed.add(line[: -len("|quick")])
+            elif line.endswith("|long"):
+                long_processed.add(line[: -len("|long")])
+            else:
+                quick_processed.add(line)
+                long_processed.add(line)
+
+        quick_data = {"version": 1, "mode": "quick", "input_dir": input_dir,
+                      "processed": sorted(quick_processed)}
+        long_data = {"version": 1, "mode": "long", "input_dir": input_dir,
+                     "processed": sorted(long_processed)}
+
+        quick_staged = atomic_write_json_staged(PROCESSED_SONGS_QUICK_FILE, quick_data)
+        long_staged = atomic_write_json_staged(PROCESSED_SONGS_LONG_FILE, long_data)
+
+        if not (quick_staged and long_staged):
+            for path in (PROCESSED_SONGS_QUICK_FILE, PROCESSED_SONGS_LONG_FILE):
+                tmp_path = path + ".tmp"
+                try:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    pass
+            self._log(self._tr("log_migration_write_error"))
+            return
+
+        if not atomic_replace_staged(PROCESSED_SONGS_QUICK_FILE):
+            self._log(self._tr("log_migration_write_error"))
+            return
+        if not atomic_replace_staged(PROCESSED_SONGS_LONG_FILE):
+            self._log(self._tr("log_migration_write_error"))
+            return
+
+        try:
+            os.replace(LEGACY_PROCESSED_FILE, LEGACY_PROCESSED_FILE + ".migrated.bak")
+        except Exception:
+            pass
+
+        self._log(self._tr("log_migration_success", count=len(lines)))
 
     def _maybe_flush_env(self):
         if self.is_running:
@@ -2177,24 +2749,6 @@ class WerZatSongGUI(tk.Tk):
         self._set_var_silently(self.dir_vars[key], os.path.normpath(chosen))
         self._flush_immediately()
 
-    def _browse_subfolder(self):
-        base = self.config_data.get("db_dir") or DEFAULT_DB_DIR
-        os.makedirs(base, exist_ok=True)
-        chosen = filedialog.askdirectory(initialdir=base, title=self._tr("select_fingerprint_subdir_title"))
-        if not chosen:
-            return
-        base_norm = os.path.normpath(base)
-        chosen_norm = os.path.normpath(chosen)
-        try:
-            rel = os.path.relpath(chosen_norm, base_norm)
-        except ValueError:
-            rel = None
-        if not rel or rel.startswith("..") or os.path.isabs(rel):
-            messagebox.showwarning(self._tr("warning_title"), self._tr("invalid_subdir_msg"))
-            return
-        self._set_var_silently(self.var_subfolder_name, rel)
-        self._flush_immediately()
-
     # ------------------------------------------------------------------
     # Credits
     # ------------------------------------------------------------------
@@ -2237,10 +2791,454 @@ class WerZatSongGUI(tk.Tk):
         top.grab_set()
 
 # ------------------------------------------------------------------
+# Song Selection / PKLZ Folder Selection dialogs
+# ------------------------------------------------------------------
+
+    def _open_song_selection_menu(self):
+        """Opens the Song Selection dialog: a tree of input_dir with a Quick/Long checkbox
+        per song, replacing the old "Mark all audio files as processed in" buttons. Saves two
+        JSON files listing which songs are EXCLUDED from (or already completed in) each mode;
+        see PROCESSED_SONGS_QUICK_FILE / PROCESSED_SONGS_LONG_FILE and _save_song_selection.
+        The dialog's checkboxes are independent of the current scan_mode: they describe
+        per-song state the user is free to edit in preparation for either this session or a
+        future one, so no column is ever greyed out based on the current scan_mode."""
+        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        if not os.path.exists(input_dir):
+            messagebox.showerror(self._tr("error_title"), self._tr("input_dir_not_found", dir=input_dir))
+            return
+
+        all_files = []
+        for root, dirs, files in os.walk(input_dir):
+            if TEMP_STAGING_DIRNAME in dirs:
+                dirs.remove(TEMP_STAGING_DIRNAME)
+            for file in files:
+                if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
+                    full_path = os.path.join(root, file)
+                    all_files.append(os.path.relpath(full_path, input_dir))
+
+        if not all_files:
+            messagebox.showinfo(self._tr("info_title"), self._tr("no_audio_files_found", dir=input_dir))
+            return
+
+        # Malformed JSON / input_dir mismatch both come back as an empty processed set from
+        # _load_processed_songs (which also logs its own warning on a mismatch), so every song
+        # simply shows up as pending in that column: a safe default, never a crash.
+        quick_processed, _ = self._load_processed_songs("quick")
+        long_processed, _ = self._load_processed_songs("long")
+
+        # Per-file pending state: True means "checked" (candidate for that mode). Stale
+        # entries in the JSONs (paths that no longer exist on disk) simply never match
+        # anything in all_files, so they can't affect any checkbox here, and get pruned
+        # automatically the next time _save_processed_songs succeeds.
+        file_state = {
+            rel: {"quick": rel not in quick_processed, "long": rel not in long_processed}
+            for rel in all_files
+        }
+
+        class _SongNode:
+            __slots__ = ("name", "rel", "is_file", "children", "parent")
+
+            def __init__(self, name, rel, is_file, parent=None):
+                self.name = name
+                self.rel = rel
+                self.is_file = is_file
+                self.children = {}
+                self.parent = parent
+
+        root_node = _SongNode("", "", False)
+        for rel in all_files:
+            parts = rel.split(os.sep)
+            node = root_node
+            accum = ""
+            for i, part in enumerate(parts):
+                accum = part if not accum else os.path.join(accum, part)
+                is_file = (i == len(parts) - 1)
+                if part not in node.children:
+                    node.children[part] = _SongNode(part, accum, is_file, node)
+                node = node.children[part]
+
+        def sorted_children(node):
+            # Folders first, then files, each group sorted case-insensitively: a user
+            # scanning a long folder list for one song benefits from a stable, predictable
+            # order instead of os.walk's arbitrary one.
+            return sorted(node.children.values(), key=lambda n: (n.is_file, n.name.casefold()))
+
+        top = tk.Toplevel(self)
+        top.title(self._tr("song_selection_title"))
+        top.transient(self)
+        top.geometry("680x560")
+        top.minsize(520, 380)
+
+        # Explains, up front, what the two columns are and what checking both means for a
+        # song: this is the answer to "how do I know what happens when I check both modes for
+        # a song", asked for directly rather than only through the "?" popup.
+        self._add_text_widget(
+            ttk.Label(top, wraplength=640, justify="left", padding=(10, 8, 10, 0)),
+            "song_selection_both_modes_note"
+        ).pack(fill="x")
+
+        tree_frame = ttk.Frame(top, padding=10)
+        tree_frame.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(tree_frame, columns=("quick", "long"), show="tree headings")
+        tree.heading("#0", text=self._tr("file_column"))
+        tree.heading("quick", text=self._tr("quick_column"))
+        tree.heading("long", text=self._tr("long_column"))
+        tree.column("#0", width=360, stretch=True)
+        tree.column("quick", width=110, anchor="center", stretch=False)
+        tree.column("long", width=110, anchor="center", stretch=False)
+
+        vscroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vscroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        vscroll.pack(side="right", fill="y")
+
+        # Checkbox glyphs are non-ASCII and render via whatever font the current Tk theme
+        # provides. On Windows 10/11 with Segoe UI these three are expected to render fine;
+        # if a visual check on the target install shows a fallback glyph, swap these three
+        # constants for "[x]" / "[ ]" / "[-]" instead. Uglier, but bulletproof everywhere.
+        CHECKED, UNCHECKED, PARTIAL = "☑", "☐", "▣"
+
+        def glyph_for(checked):
+            return CHECKED if checked else UNCHECKED
+
+        def folder_tristate(node, mode):
+            total = 0
+            checked = 0
+
+            def walk(n):
+                nonlocal total, checked
+                if n.is_file:
+                    total += 1
+                    if file_state[n.rel][mode]:
+                        checked += 1
+                else:
+                    for c in n.children.values():
+                        walk(c)
+
+            walk(node)
+            if total == 0 or checked == 0:
+                return "unchecked"
+            if checked == total:
+                return "checked"
+            return "partial"
+
+        node_to_item = {}
+        item_to_node = {}
+
+        def update_folder_glyph(node):
+            iid = node_to_item[node]
+            glyph_map = {"checked": CHECKED, "unchecked": UNCHECKED, "partial": PARTIAL}
+            tree.set(iid, "quick", glyph_map[folder_tristate(node, "quick")])
+            tree.set(iid, "long", glyph_map[folder_tristate(node, "long")])
+
+        def insert_node(parent_item, node):
+            if node.is_file:
+                state = file_state[node.rel]
+                iid = tree.insert(parent_item, "end", text=node.name,
+                                   values=(glyph_for(state["quick"]), glyph_for(state["long"])))
+            else:
+                iid = tree.insert(parent_item, "end", text=node.name, values=("", ""), open=True)
+            node_to_item[node] = iid
+            item_to_node[iid] = node
+            if not node.is_file:
+                for child in sorted_children(node):
+                    insert_node(iid, child)
+                update_folder_glyph(node)
+
+        for child in sorted_children(root_node):
+            insert_node("", child)
+
+        def set_subtree(node, mode, value):
+            if node.is_file:
+                file_state[node.rel][mode] = value
+                tree.set(node_to_item[node], mode, glyph_for(value))
+            else:
+                for child in node.children.values():
+                    set_subtree(child, mode, value)
+
+        def refresh_ancestors(node):
+            anc = node.parent
+            while anc is not None and anc is not root_node:
+                update_folder_glyph(anc)
+                anc = anc.parent
+
+        def toggle(node, mode):
+            if node.is_file:
+                set_subtree(node, mode, not file_state[node.rel][mode])
+            else:
+                # Folder click: standard checkbox-tree behavior. If the folder isn't fully
+                # checked (i.e. it's unchecked or partial), check every descendant; if it's
+                # fully checked, uncheck every descendant. Partial states propagate upward via
+                # refresh_ancestors below.
+                new_value = folder_tristate(node, mode) != "checked"
+                set_subtree(node, mode, new_value)
+                update_folder_glyph(node)
+            refresh_ancestors(node)
+
+        def on_tree_click(event):
+            if tree.identify_region(event.x, event.y) != "cell":
+                return
+            col = tree.identify_column(event.x)
+            row = tree.identify_row(event.y)
+            node = item_to_node.get(row)
+            if node is None:
+                return
+            if col == "#1":
+                toggle(node, "quick")
+            elif col == "#2":
+                toggle(node, "long")
+
+        tree.bind("<Button-1>", on_tree_click)
+
+        def select_all(mode, value):
+            set_subtree(root_node, mode, value)
+            for node in node_to_item:
+                if not node.is_file:
+                    update_folder_glyph(node)
+
+        btn_frame = ttk.Frame(top, padding=(10, 0, 10, 6))
+        btn_frame.pack(fill="x")
+        self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("quick", True)),
+                              "select_all_quick_btn").pack(side="left", padx=2)
+        self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("quick", False)),
+                              "clear_quick_btn").pack(side="left", padx=2)
+        self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("long", True)),
+                              "select_all_long_btn").pack(side="left", padx=2)
+        self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("long", False)),
+                              "clear_long_btn").pack(side="left", padx=2)
+
+        action_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
+        action_frame.pack(fill="x")
+
+        def do_save():
+            quick_checked = {rel for rel, state in file_state.items() if state["quick"]}
+            long_checked = {rel for rel, state in file_state.items() if state["long"]}
+            self._save_song_selection(quick_checked, long_checked)
+            top.destroy()
+
+        self._add_text_widget(ttk.Button(action_frame, command=do_save),
+                              "save_btn").pack(side="right", padx=2)
+        self._add_text_widget(ttk.Button(action_frame, command=top.destroy),
+                              "cancel_btn").pack(side="right", padx=2)
+
+        top.protocol("WM_DELETE_WINDOW", top.destroy)
+        top.grab_set()
+
+    def _save_song_selection(self, quick_checked, long_checked):
+        """quick_checked/long_checked: the full relative paths (from the Song Selection
+        dialog) that are checked, i.e. candidates for that mode. Saves the complement (the
+        files that are NOT checked, meaning already processed or deliberately excluded) to
+        each mode's JSON, via _save_processed_songs, which itself owns the input_dir mismatch
+        guard: if a JSON's stored input_dir doesn't match the current one, that JSON's save is
+        silently refused (and logged), so a user opening this dialog purely to inspect the
+        tree can never surprise-corrupt a mismatched file. Re-walks input_dir rather than
+        trusting the dialog's own file list, in case something on disk changed while the
+        dialog was open."""
+        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        all_files = set()
+        for root, dirs, files in os.walk(input_dir):
+            if TEMP_STAGING_DIRNAME in dirs:
+                dirs.remove(TEMP_STAGING_DIRNAME)
+            for file in files:
+                if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
+                    all_files.add(os.path.relpath(os.path.join(root, file), input_dir))
+
+        self._save_processed_songs("quick", all_files - quick_checked)
+        self._save_processed_songs("long", all_files - long_checked)
+
+    def _open_pklz_selection_menu(self):
+        """Opens the PKLZ Folder Selection dialog: a tree of subfolders inside
+        db_dir, each with a single checkbox, letting the user restrict Audfprint searches to
+        specific fingerprint collections instead of always searching the whole database.
+        Saves PKLZ_FOLDERS_FILE via _save_pklz_selection."""
+        db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
+        if not os.path.exists(db_dir):
+            messagebox.showerror(self._tr("error_title"), self._tr("pklz_folder_missing", dir=db_dir))
+            return
+
+        # Bottom-up: a folder qualifies (is offered in the tree) if it directly contains a
+        # .pklz file, or any of its descendants do. A folder with none would just be a dead
+        # selection Audfprint could never find anything in.
+        has_pklz = set()
+        for root, dirs, files in os.walk(db_dir, topdown=False):
+            contains = any(f.lower().endswith(".pklz") for f in files)
+            if not contains:
+                contains = any(os.path.relpath(os.path.join(root, d), db_dir) in has_pklz for d in dirs)
+            if contains and root != db_dir:
+                has_pklz.add(os.path.relpath(root, db_dir))
+
+        if not has_pklz:
+            messagebox.showinfo(self._tr("info_title"), self._tr("no_pklz_folders_found", dir=db_dir))
+            return
+
+        use_full, saved_folders, _db_mismatch = self._load_pklz_selection()
+        selected = {f for f in saved_folders if f in has_pklz}
+
+        class _PklzNode:
+            __slots__ = ("name", "rel", "children", "parent")
+
+            def __init__(self, name, rel, parent=None):
+                self.name = name
+                self.rel = rel
+                self.children = {}
+                self.parent = parent
+
+        proot = _PklzNode("", "")
+        for rel in sorted(has_pklz):
+            parts = rel.split(os.sep)
+            node = proot
+            accum = ""
+            for part in parts:
+                accum = part if not accum else os.path.join(accum, part)
+                if part not in node.children:
+                    node.children[part] = _PklzNode(part, accum, node)
+                node = node.children[part]
+
+        top = tk.Toplevel(self)
+        top.title(self._tr("pklz_folder_selection_title"))
+        top.transient(self)
+        top.geometry("480x480")
+        top.minsize(360, 320)
+
+        var_use_full = tk.BooleanVar(value=use_full)
+        ttk.Checkbutton(top, variable=var_use_full, text=self._tr("use_full_database_check"),
+                        command=lambda: refresh_enabled()).pack(anchor="w", padx=10, pady=(10, 4))
+
+        tree_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
+        tree_frame.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(tree_frame, columns=("selected",), show="tree headings")
+        tree.heading("#0", text=self._tr("file_column"))
+        tree.heading("selected", text="")
+        tree.column("#0", width=340, stretch=True)
+        tree.column("selected", width=50, anchor="center", stretch=False)
+
+        vscroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vscroll.set)
+        tree.pack(side="left", fill="both", expand=True)
+        vscroll.pack(side="right", fill="y")
+
+        CHECKED, UNCHECKED = "☑", "☐"
+
+        node_to_item = {}
+        item_to_node = {}
+
+        def insert_pnode(parent_item, node):
+            iid = tree.insert(parent_item, "end", text=node.name, values=("",), open=True)
+            node_to_item[node] = iid
+            item_to_node[iid] = node
+            for child in sorted(node.children.values(), key=lambda n: n.name.casefold()):
+                insert_pnode(iid, child)
+
+        for child in sorted(proot.children.values(), key=lambda n: n.name.casefold()):
+            insert_pnode("", child)
+
+        def is_disabled(node):
+            anc = node.parent
+            while anc is not None and anc is not proot:
+                if anc.rel in selected:
+                    return True
+                anc = anc.parent
+            return False
+
+        def refresh_all_glyphs():
+            full = var_use_full.get()
+            for node, iid in node_to_item.items():
+                glyph = CHECKED if (not full and node.rel in selected) else UNCHECKED
+                tree.set(iid, "selected", glyph)
+                tree.item(iid, tags=("disabled",) if (full or is_disabled(node)) else ())
+            tree.tag_configure("disabled", foreground="#888888")
+
+        def clear_descendants(node):
+            for child in node.children.values():
+                selected.discard(child.rel)
+                clear_descendants(child)
+
+        def clear_ancestors(node):
+            anc = node.parent
+            while anc is not None and anc is not proot:
+                selected.discard(anc.rel)
+                anc = anc.parent
+
+        def toggle_pklz(node):
+            # Selecting a parent unchecks and disables all descendants (their scan is already
+            # covered by the parent's own subtree search). Selecting a child unchecks its
+            # ancestors (a more specific choice supersedes the broader one). Siblings remain
+            # independently selectable throughout.
+            if is_disabled(node):
+                return
+            if node.rel in selected:
+                selected.discard(node.rel)
+            else:
+                clear_ancestors(node)
+                clear_descendants(node)
+                selected.add(node.rel)
+            refresh_all_glyphs()
+
+        def on_pklz_click(event):
+            if var_use_full.get():
+                return
+            if tree.identify_region(event.x, event.y) != "cell":
+                return
+            if tree.identify_column(event.x) != "#1":
+                return
+            node = item_to_node.get(tree.identify_row(event.y))
+            if node is not None:
+                toggle_pklz(node)
+
+        tree.bind("<Button-1>", on_pklz_click)
+
+        def refresh_enabled():
+            refresh_all_glyphs()
+
+        refresh_enabled()
+
+        action_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
+        action_frame.pack(fill="x")
+
+        def do_save():
+            use_full_val = var_use_full.get()
+            if not use_full_val and not selected:
+                messagebox.showwarning(self._tr("warning_title"), self._tr("pklz_selection_required"))
+                return
+            self._save_pklz_selection(use_full_val, sorted(selected))
+            top.destroy()
+
+        self._add_text_widget(ttk.Button(action_frame, command=do_save),
+                              "save_btn").pack(side="right", padx=2)
+        self._add_text_widget(ttk.Button(action_frame, command=top.destroy),
+                              "cancel_btn").pack(side="right", padx=2)
+
+        top.protocol("WM_DELETE_WINDOW", top.destroy)
+        top.grab_set()
+
+    def _open_processed_folder(self):
+        """Opens PROCESSED_DIR (assets/listsProcessed/) in Explorer. Replaces the old
+        _open_processed_file, which opened the single PROCESSED.txt file directly: there are
+        now two JSON files plus the PKLZ selection JSON, so a folder is the right target."""
+        try:
+            os.makedirs(PROCESSED_DIR, exist_ok=True)
+            os.startfile(PROCESSED_DIR)
+        except Exception as e:
+            messagebox.showerror(self._tr("error_title"), self._tr("processed_file_open_error", error=e))
+
+# ------------------------------------------------------------------
 # Add pklz / audio files
 # ------------------------------------------------------------------
 
-    def _prompt_files_or_folder(self, title_key, show_pklz_link=False, show_song_databases_btn=False):
+    def _prompt_files_or_folder(self, title_key, config_key, show_pklz_link=False, show_song_databases_btn=False):
+        """
+        title_key:  translation key for the dialog title.
+        config_key: config.json key that stores this dialog's copy/move preference. Either
+                    "add_pklz_action" (for Add PKLZ Files...) or "add_audio_action" (for Add
+                    Audio Files...). This helper only reads and writes this one key; it does
+                    not know or care which button opened it. The value written here is what
+                    _copy_items_worker() later reads to decide whether to delete the source
+                    after copying.
+        show_pklz_link: whether to show the public PKLZ database link.
+        show_song_databases_btn: whether to show the "Download Song Databases..." button.
+        """
         result = {"choice": None}
         top = tk.Toplevel(self)
         top.title(self._tr(title_key))
@@ -2262,9 +3260,14 @@ class WerZatSongGUI(tk.Tk):
 
         if show_pklz_link:
             link = tk.Label(top, text=self._tr("public_pklz_link"), fg="#1a56db", cursor="hand2",
-                             font=("Segoe UI", 9, "underline"))
-            link.pack(pady=(0, 15))
+                            font=("Segoe UI", 9, "underline"))
+            link.pack(pady=(0, 4))
             link.bind("<Button-1>", lambda _event: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL))
+
+            link_alt = tk.Label(top, text=self._tr("public_pklz_link_alt"), fg="#1a56db", cursor="hand2",
+                                font=("Segoe UI", 9, "underline"))
+            link_alt.pack(pady=(0, 15))
+            link_alt.bind("<Button-1>", lambda _event: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL_ALT))
 
         if show_song_databases_btn:
             def _open_databases_window():
@@ -2291,6 +3294,43 @@ class WerZatSongGUI(tk.Tk):
 
             ttk.Button(top, text=self._tr("download_song_databases_btn"), command=_open_databases_window).pack(pady=(0, 15))
 
+        # Seed the radio group's initial state from config_data. validate_config() has already
+        # guaranteed the key exists and holds "copy" or "move", so the .get() default here is a
+        # belt-and-suspenders fallback rather than the primary path.
+        action_var = tk.StringVar(value=self.config_data.get(config_key, "move"))
+
+        action_frame = ttk.LabelFrame(top, padding=10)
+        self._add_text_widget(action_frame, "add_files_action_label")
+        action_frame.pack(padx=15, pady=(0, 15), fill="x")
+
+        # Move first: it's the default, and reading top-to-bottom the user sees the default
+        # option first.
+        self._add_text_widget(
+            ttk.Radiobutton(action_frame, variable=action_var, value="move"),
+            "add_files_action_move",
+        ).pack(anchor="w", pady=2)
+
+        self._add_text_widget(
+            ttk.Radiobutton(action_frame, variable=action_var, value="copy"),
+            "add_files_action_copy",
+        ).pack(anchor="w", pady=2)
+
+        # Persist on every toggle, not on dialog close: the user can dismiss the dialog with
+        # Cancel at any time, and the preference should survive that, matching how the rest of
+        # the app's settings behave (auto-save on change).
+        #
+        # IMPORTANT: do NOT "simplify" this callback. _persist_action writes ONLY to
+        # self.config_data[config_key] and then calls _save_config_to_disk(). It must NOT call
+        # action_var.set(...) (that would re-fire the trace, potentially in a loop, and is not
+        # needed here) and must NOT go through _schedule_flush() / _flush_now() /
+        # _sync_widgets_to_config() (those paths walk long-lived widgets that do not include
+        # this dialog's radio buttons, since the dialog is created and destroyed on demand).
+        # The two direct writes above are the entire contract.
+        def _persist_action(*_args):
+            self.config_data[config_key] = action_var.get()
+            self._save_config_to_disk()
+        action_var.trace_add("write", _persist_action)
+
         top.protocol("WM_DELETE_WINDOW", lambda: pick(None))
         top.grab_set()
         top.wait_window(top)
@@ -2302,18 +3342,21 @@ class WerZatSongGUI(tk.Tk):
             show_pklz_link = True
             show_song_databases_btn = False
             filetypes = [("PKLZ files", "*.pklz")]
+            config_key = "add_pklz_action"
         else:
             title_key = "add_audio_title"
             show_pklz_link = False
             show_song_databases_btn = True
             filetypes = [("Audio files", "*.mp3 *.wav *.flac *.m4a")]
-            
+            config_key = "add_audio_action"
+
         choice = self._prompt_files_or_folder(
             title_key,
+            config_key,
             show_pklz_link=show_pklz_link,
             show_song_databases_btn=show_song_databases_btn
         )
-        
+
         if choice is None:
             return
 
@@ -2335,48 +3378,245 @@ class WerZatSongGUI(tk.Tk):
 
     def _copy_items_worker(self, items, dest_dir, kind):
         error = None
+        action_key = "add_pklz_action" if kind == "pklz" else "add_audio_action"
+        action = self.config_data.get(action_key, "move")
         try:
             os.makedirs(dest_dir, exist_ok=True)
             dest_label = "database" if kind == "pklz" else "input"
+            create_hashes = (kind == "pklz"
+                            and self.config_data.get("create_pklz_hash_tables_on_load_val", False))
             for item in items:
                 name = os.path.basename(item.rstrip("\\/"))
-                self._log(self._tr("copy_start", name=name, dest=dest_label))
+                if action == "move":
+                    self._log(self._tr("move_start", name=name, dest=dest_label))
+                else:
+                    self._log(self._tr("copy_start", name=name, dest=dest_label))
+
+                copy_ok = False
                 try:
                     if os.path.isdir(item):
                         shutil.copytree(item, os.path.join(dest_dir, name), dirs_exist_ok=True)
                     else:
                         shutil.copy2(item, os.path.join(dest_dir, name))
-                    self._log(self._tr("copy_success", name=name))
+                    copy_ok = True
                 except Exception as e:
-                    self._log(self._tr("copy_error", name=name, error=e))
+                    if action == "move":
+                        self._log(self._tr("move_copy_error", name=name, error=e))
+                    else:
+                        self._log(self._tr("copy_error", name=name, error=e))
+
+                if not copy_ok:
+                    continue
+
+                # The hash-table listing step reads the SOURCE path, so it must run before any
+                # delete below (move mode deletes the source once it's done).
+                if create_hashes:
+                    if os.path.isdir(item):
+                        self._write_hash_table_listings_for_folder(item, name)
+                    else:
+                        self._write_hash_table_listing_for_file(item)
+
+                if action == "move":
+                    if self._is_safe_to_delete_source(item, dest_dir):
+                        try:
+                            if os.path.isdir(item):
+                                shutil.rmtree(item)
+                            else:
+                                os.remove(item)
+                        except Exception as e:
+                            self._log(self._tr("move_delete_error", name=name, error=e))
+                    else:
+                        self._log(self._tr("move_delete_skipped", name=name))
+                    # Phrased as "Added", not "Moved": the delete half above can be
+                    # independently skipped or fail, and "Added" reads correctly either way,
+                    # instead of contradicting a following move_delete_skipped/move_delete_error
+                    # line ("Moved 'foo' ... but didn't delete 'foo'" would read as a bug).
+                    self._log(self._tr("move_success", name=name))
+                else:
+                    self._log(self._tr("copy_success", name=name))
         except Exception as e:
             error = str(e)
-        self.after(0, self._on_copy_finished, error)
+        self.after(0, self._on_copy_finished, error, action)
 
-    def _on_copy_finished(self, error=None):
+    def _on_copy_finished(self, error=None, action="copy"):
         self.btn_add_pklz.configure(state="normal")
         self.btn_add_audio.configure(state="normal")
         if error:
             messagebox.showerror(self._tr("copy_failed_title"), error)
+        elif action == "move":
+            messagebox.showinfo(self._tr("copy_finished_title"), self._tr("move_finished_msg"))
         else:
             messagebox.showinfo(self._tr("copy_finished_title"), self._tr("copy_finished_msg"))
+
+    @staticmethod
+    def _is_safe_to_delete_source(src, dest_dir):
+        """Returns True only if it is safe to delete `src` after having copied it into
+        `dest_dir`. Two dangerous configurations must be refused:
+
+          (1) `src` is the same as, or lives inside, `dest_dir`. Deleting it would remove the
+              freshly-copied data (or the destination folder itself).
+
+          (2) `dest_dir` lives inside `src`. Deleting `src` would recursively wipe out the
+              destination along with everything else.
+
+        The comparisons are done on os.path.abspath-normalized paths, anchored with a trailing
+        separator on the "container" side so that e.g. C:\\data\\input is not mistaken for a
+        prefix of C:\\data\\input_backup.
+
+        Both sides are additionally passed through os.path.normcase, because on Windows
+        filesystem paths are case-insensitive: C:\\Users\\me\\Input and c:\\users\\me\\input are
+        the same folder, but os.path.abspath does not normalize case, so a case-only difference
+        would otherwise slip past the equality and prefix checks below. normcase is a no-op on
+        POSIX, so this is safe to apply unconditionally.
+
+        Symlinks are not resolved via os.path.realpath(). On Windows this is a non-issue, and
+        on POSIX a source that is a symlink into the destination can still be deleted safely
+        (deleting the symlink itself does not touch the target). If this ever needs to run on
+        POSIX with realpath semantics, add realpath() on both sides before comparing."""
+        src_abs = os.path.normcase(os.path.abspath(src))
+        dst_abs = os.path.normcase(os.path.abspath(dest_dir))
+        if src_abs == dst_abs:
+            return False
+        src_with_sep = src_abs + os.sep
+        dst_with_sep = dst_abs + os.sep
+        if src_with_sep.startswith(dst_with_sep):
+            return False
+        if dst_with_sep.startswith(src_with_sep):
+            return False
+        return True
+
+    # ------------------------------------------------------------------
+    # Hash table creation (create_pklz_hash_tables_on_load_val)
+    # ------------------------------------------------------------------
+
+    def _write_hash_table_listing_for_file(self, pklz_path):
+        base_name = os.path.splitext(os.path.basename(pklz_path))[0]
+        hash_tables_dir = self.config_data.get("hash_tables_dir", DEFAULT_HASH_TABLES_DIR)
+        output_path = os.path.join(hash_tables_dir, f"{base_name}_hash_table.txt")
+        self._write_hash_table_listing(pklz_path, output_path)
+
+    def _write_hash_table_listings_for_folder(self, folder_path, top_name):
+        hash_tables_dir = self.config_data.get("hash_tables_dir", DEFAULT_HASH_TABLES_DIR)
+        for root, dirs, files in os.walk(folder_path):
+            dirs.sort()
+            files.sort()
+            for file in files:
+                if not file.lower().endswith(".pklz"):
+                    continue
+                full_path = os.path.join(root, file)
+                rel = os.path.relpath(root, folder_path)
+                if rel == ".":
+                    out_dir = os.path.join(hash_tables_dir, top_name)
+                else:
+                    out_dir = os.path.join(hash_tables_dir, top_name, rel)
+                base_name = os.path.splitext(file)[0]
+                output_path = os.path.join(out_dir, f"{base_name}_hash_table.txt")
+                self._write_hash_table_listing(full_path, output_path)
+
+    def _write_hash_table_listing(self, pklz_path, output_path):
+        """Loads a source .pklz file with audfprint's own HashTable and writes a plain-text
+        listing of its contents (all the audio files it contains, and how many hashes each
+        one contributed). Runs on the background worker thread started by _copy_items_worker,
+        so any failure is logged (never raised)."""
+        self._log(self._tr("log_hash_table_listing_writing", file=os.path.basename(pklz_path)))
+        try:
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            # IMPORTANT: audfprint's own modules use BARE imports internally (see audfprint.py's
+            # `import hash_table`, `import audfprint_analyze`, `import stft`, `import audio_read`)
+            # and are meant to be run with the audfprint folder itself on sys.path. This matters
+            # for two independent reasons:
+            #   1) Loading hash_table.py as a top-level module (rather than as the package
+            #      submodule "audfprint.hash_table") matches how audfprint.py itself does it.
+            #   2) The .pklz files on disk were serialized by a script that ran that way, so
+            #      pickle stores the class as "hash_table.HashTable" (bare). If we only
+            #      registered "audfprint.hash_table", unpickling would fail with
+            #      "No module named 'hash_table'" even though the module is physically present.
+            audfprint_libs_dir = os.path.join(ASSETS_FOLDER, "libs", "audfprint")
+            if audfprint_libs_dir not in sys.path:
+                sys.path.insert(0, audfprint_libs_dir)
+
+            hash_table_module = importlib.import_module("hash_table")
+            HashTable = hash_table_module.HashTable
+
+            # Compatibility shim: .pklz files created with numpy 2.x store class
+            # references under "numpy._core.*", but numpy 1.x only exposes "numpy.core.*".
+            # Aliasing the 2.x paths to the 1.x equivalents in sys.modules before
+            # unpickling lets an old numpy installation load newer pickles.
+            # (numpy >= 2.0 already aliases "numpy.core" -> "numpy._core", so this is a
+            # no-op there and the reverse direction just keeps working.)
+            import numpy as _np
+            if not hasattr(_np, "_core"):
+                _aliases = {
+                    "numpy._core": _np.core,
+                    "numpy._core.multiarray": _np.core.multiarray,
+                    "numpy._core.umath": _np.core.umath,
+                    "numpy._core._multiarray_umath": _np.core._multiarray_umath,
+                    "numpy._core.numerictypes": _np.core.numerictypes,
+                }
+                for _alias, _target in _aliases.items():
+                    sys.modules.setdefault(_alias, _target)
+
+            # Captures audfprint's own stdout for the duration of these two calls:
+            #   - HashTable(filename=...) prints a "Read fprints for ..." summary line
+            #   - HashTable.list()       prints one "<name> (<N> hashes)" line per contained file
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                hashtable = HashTable(filename=pklz_path)
+                hashtable.list()
+
+            with open(output_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(buf.getvalue())
+
+            self._log(self._tr("log_hash_table_listing_written", file=output_path))
+        except Exception as e:
+            self._log(self._tr("log_hash_table_listing_error",
+                            file=os.path.basename(pklz_path), error=e))
 
     # ------------------------------------------------------------------
     # Processed files
     # ------------------------------------------------------------------
 
-    def _open_processed_file(self):
-        if not os.path.exists(PROCESSED_FILE):
-            try:
-                os.makedirs(os.path.dirname(os.path.abspath(PROCESSED_FILE)), exist_ok=True)
-                open(PROCESSED_FILE, "w", encoding="utf-8").close()
-            except Exception as e:
-                messagebox.showerror(self._tr("error_title"), self._tr("processed_file_error", error=e))
-                return
+    def _save_console_log(self):
+        """Dumps the current console widget's visible text to a timestamped file inside
+        the configured console_logs_dir, then informs the user where it went."""
+        console_logs_dir = (self.dir_vars["console_logs_dir"].get().strip()
+                            if "console_logs_dir" in self.dir_vars
+                            else self.config_data.get("console_logs_dir", DEFAULT_CONSOLE_LOGS_DIR))
         try:
-            os.startfile(PROCESSED_FILE)
+            os.makedirs(console_logs_dir, exist_ok=True)
         except Exception as e:
-            messagebox.showerror(self._tr("error_title"), self._tr("processed_file_open_error", error=e))
+            messagebox.showerror(self._tr("error_title"),
+                                self._tr("console_log_save_error", error=e))
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{timestamp}_v{APP_VERSION}_WZSGUI_CLog.txt"
+        filepath = os.path.join(console_logs_dir, filename)
+
+        try:
+            content = self.console.get("1.0", "end-1c")
+            with open(filepath, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+        except Exception as e:
+            messagebox.showerror(self._tr("error_title"),
+                                self._tr("console_log_save_error", error=e))
+            return
+
+        messagebox.showinfo(self._tr("info_title"),
+                            self._tr("console_log_saved_msg", path=filepath))
+
+    def _open_crash_logs_file(self):
+        """Opens WerZatSonGUI's own crash_logs.txt (the Tee'd stdout/stderr dump from
+        startup). Completely independent from the console logs."""
+        try:
+            if not os.path.exists(CRASH_LOG_FILE):
+                os.makedirs(os.path.dirname(CRASH_LOG_FILE), exist_ok=True)
+                open(CRASH_LOG_FILE, "w", encoding="utf-8").close()
+            os.startfile(CRASH_LOG_FILE)
+        except Exception as e:
+            messagebox.showerror(self._tr("error_title"),
+                                self._tr("crash_log_open_error", error=e))
 
     # ------------------------------------------------------------------
     # Start WerZatSong (ported temp/werzatsongrunner.py pipeline)
@@ -2402,6 +3642,16 @@ class WerZatSongGUI(tk.Tk):
                     pass
             self._set_container_enabled(widget, enabled)
 
+    def _re_enable_logs_tab(self):
+        """The Logs tab's controls (save console log, open crash logs, and the
+        console_logs_dir picker) have to stay usable even while a scan is running,
+        so this re-enablse just that subtree after _set_container_enabled has greyed
+        out the rest of the Advanced notebook. The console widget itself lives
+        outside the notebook and is already never disabled."""
+        frame = getattr(self, "_logs_tab_frame", None)
+        if frame is not None and frame.winfo_exists():
+            self._set_container_enabled(frame, True)
+
     def _on_start_clicked(self):
         if self.is_running:
             return
@@ -2410,7 +3660,55 @@ class WerZatSongGUI(tk.Tk):
             messagebox.showwarning(self._tr("no_mode_selected"), self._tr("no_mode_selected_msg"))
             return
 
-        self._flush_immediately()
+        try:
+            self._sync_env_from_disk_force()
+        except Exception as e:
+            import traceback
+            messagebox.showerror("Error in _sync_env_from_disk_force", traceback.format_exc())
+            return
+
+        try:
+            self._flush_immediately()
+        except Exception as e:
+            import traceback
+            messagebox.showerror("Error in _flush_immediately", traceback.format_exc())
+            return
+
+        # input_dir mismatch check, on the main thread, before the background worker starts: a
+        # Tk messagebox must never be constructed off the main thread, and this is the one
+        # place in the whole start flow that still runs on it. _orchestrate_pipeline (which
+        # runs on the background worker) will call _load_processed_songs again later for the
+        # actual scan, which is fine: that call only reads and logs, it never pops a dialog.
+        # This prompt fires at most once per session per mode, tracked in
+        # self._mismatch_prompted; the read-time [WARNING] log line, by contrast, is emitted by
+        # _load_processed_songs on every single call, mismatched or not.
+        for mode in ("quick", "long"):
+            _processed, mismatch = self._load_processed_songs(mode)
+            if not mismatch:
+                self._processed_json_writable[mode] = True
+                continue
+            if mode in self._mismatch_prompted:
+                continue
+            self._mismatch_prompted.add(mode)
+            path = self._processed_songs_path(mode)
+            existing = load_json_file(path, {})
+            old_dir = existing.get("input_dir", "") if isinstance(existing, dict) else ""
+            new_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+            reset = messagebox.askyesno(
+                self._tr("input_dir_mismatch_prompt_title"),
+                self._tr("input_dir_mismatch_prompt_msg", old=old_dir, new=new_dir),
+            )
+            if reset:
+                existing_processed = existing.get("processed", []) if isinstance(existing, dict) else []
+                if not isinstance(existing_processed, list):
+                    existing_processed = []
+                data = {"version": 1, "mode": mode, "input_dir": new_dir, "processed": existing_processed}
+                atomic_write_json(path, data)
+                self._processed_json_writable[mode] = True
+            else:
+                self._log(self._tr("log_input_dir_mismatch_kept", mode=mode))
+                self._processed_json_writable[mode] = False
+
         self.is_running = True
         self.btn_start.configure(state="disabled")
         self.btn_add_pklz.configure(state="disabled")
@@ -2419,6 +3717,7 @@ class WerZatSongGUI(tk.Tk):
         self._set_container_enabled(self._directories_frame, False)
         self._set_container_enabled(self._search_modes_frame, False)
         self._set_container_enabled(self._advanced_notebook, False)
+        self._re_enable_logs_tab()
         self._log("=" * 60)
         self._log(self._tr("log_starting"))
         self._log("=" * 60)
@@ -2427,7 +3726,7 @@ class WerZatSongGUI(tk.Tk):
     def _pipeline_worker(self):
         error = None
         try:
-            self._run_pipeline()
+            self._orchestrate_pipeline()
         except PipelineAbort as e:
             self._log(self._tr("log_pipeline_abort", error=str(e)))
         except Exception as e:
@@ -2466,10 +3765,6 @@ class WerZatSongGUI(tk.Tk):
         try:
             _kill_all_tracked_processes()
             try:
-                self._rollback_pending_processed_lines()
-            except Exception:
-                pass
-            try:
                 input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
                 force_clean_directory(INTERNAL_INPUT_FOLDER, recreate=False)
                 force_clean_directory(INTERNAL_TEMP_FOLDER, recreate=False)
@@ -2479,92 +3774,292 @@ class WerZatSongGUI(tk.Tk):
         finally:
             self.after(0, self._relaunch_self)
 
-    def _rollback_pending_processed_lines(self):
-        """Removes any PROCESSED.txt line(s) that were written (or about to be written) for
-        whatever was in flight when a run gets interrupted, so the next run picks those files
-        back up instead of treating them as already searched. Safe to call even if nothing
-        was pending."""
-        pending = self._pending_processed_lines
-        if not pending:
-            return
-        try:
-            if os.path.exists(PROCESSED_FILE):
-                with open(PROCESSED_FILE, "r", encoding="utf-8") as f:
-                    lines = [line.rstrip("\n") for line in f]
-                pending_set = set(pending)
-                kept_lines = [line for line in lines if line.strip() not in pending_set]
-                if len(kept_lines) != len(lines):
-                    with open(PROCESSED_FILE, "w", encoding="utf-8") as f:
-                        f.write("\n".join(kept_lines) + ("\n" if kept_lines else ""))
-        except Exception:
-            pass
-        finally:
-            self._pending_processed_lines = []
-
-    def _run_pipeline(self):
+    def _orchestrate_pipeline(self):
+        """Replaces the old single-pass _run_pipeline body. Runs Quick and/or Long mode, once
+        per selected PKLZ target, deferring every processed-songs commit until all targets for
+        that mode have been attempted, so a song is only ever marked processed once every
+        selected PKLZ target has actually had a chance at it (see _run_pipeline's
+        commit_processed docstring). Always runs on the background worker thread
+        (_pipeline_worker); the input_dir-mismatch prompt itself has already happened on the
+        main thread, in _on_start_clicked, before this was ever called, and its outcome is
+        already recorded in self._processed_json_writable."""
         config = self.config_data
-        input_dir = config["input_dir"]
-        mode = "long" if config.get("generate_different_tempos") else "quick"
+        input_dir = config.get("input_dir", DEFAULT_INPUT_DIR)
+
+        if not any([config.get("mode_musicbrainz"), config.get("mode_audiotag"),
+                    config.get("mode_shazam"), config.get("mode_audfprint")]):
+            raise PipelineAbort(self._tr("no_mode_selected_msg"))
 
         if not os.path.exists(input_dir):
             raise PipelineAbort(self._tr("input_dir_not_found", dir=input_dir))
 
-        if not os.path.exists(PROCESSED_FILE):
-            os.makedirs(os.path.dirname(os.path.abspath(PROCESSED_FILE)), exist_ok=True)
-            open(PROCESSED_FILE, "w", encoding="utf-8").close()
-
         force_clean_directory(INTERNAL_INPUT_FOLDER, recreate=True)
 
-        # The very first thing a scan does: convert any non-mp3 audio file to mp3 in place
-        # (replacing the original) and fix up PROCESSED.txt's extensions to match, so
-        # werzatsong.js (which only ever recognizes .mp3) and everything below only ever has
-        # to deal with one format. Must run before PROCESSED.txt is read below.
+        # The non-MP3-to-MP3 conversion (and its processed-JSON extension rewrite) must run,
+        # and finish, BEFORE the Quick/Long processed sets are loaded below: a file renamed
+        # song.wav -> song.mp3 here also has its processed-JSON entry rewritten in place (see
+        # _rewrite_processed_json_extensions), and if the processed sets were loaded first,
+        # that rewrite would land after the fact and the freshly-renamed song would look "never
+        # processed" on every single run despite having already been completed under its old
+        # extension. This ordering also matches the pre-rework code, which always converted
+        # before ever reading the (then-single) PROCESSED.txt. Runs once per orchestration, not
+        # once per PKLZ target per mode, so it does not walk input_dir N times over for no
+        # reason.
         self._convert_non_mp3_files_to_mp3(input_dir)
 
-        with open(PROCESSED_FILE, "r", encoding="utf-8") as f:
-            processed_set = set(line.strip() for line in f if line.strip())
-
-        temp_dir_path = os.path.join(input_dir, TEMP_STAGING_DIRNAME)
-
-        all_targets = []
+        all_files = set()
         for root, dirs, files in os.walk(input_dir):
             if TEMP_STAGING_DIRNAME in dirs:
                 dirs.remove(TEMP_STAGING_DIRNAME)
-
             dirs.sort()
             files.sort()
-
             for file in files:
                 if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
                     full_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(full_path, input_dir)
-                    all_targets.append((rel_path, full_path))
+                    all_files.add(os.path.relpath(full_path, input_dir))
 
-        if not all_targets:
+        if not all_files:
             raise PipelineAbort(self._tr("no_audio_files", dir=input_dir))
 
-        self._log(self._tr("log_found_files", count=len(all_targets), mode=mode.upper()))
+        quick_processed, _ = self._load_processed_songs("quick")
+        long_processed, _ = self._load_processed_songs("long")
 
-        sys_temp_dir = tempfile.mkdtemp()
-        try:
-            if mode == "long":
-                self._run_long_mode(all_targets, processed_set, temp_dir_path, sys_temp_dir)
+        pending_quick = all_files - quick_processed
+        pending_long = all_files - long_processed
+        # quick_only: pending Quick, and either already done in Long or excluded from it.
+        quick_only = pending_quick - pending_long
+        # both_pending: pending in both modes at once.
+        both_pending = pending_quick & pending_long
+
+        scan_mode = config.get("scan_mode", "quick")
+        if scan_mode == "quick":
+            # Quick-only: process every pending Quick song, including ones also pending Long.
+            # Long doesn't run this session, so its JSON is left untouched: a later "long" or
+            # "both" session will still see those songs as pending Long.
+            quick_batch = set(pending_quick)
+            long_batch = set()
+            include_original_ids = set()
+        elif scan_mode == "long":
+            # Long-only: process every pending Long song. both_pending songs have never had
+            # their original scanned against this session's PKLZ target(s), so their original
+            # is folded into the Long batch via include_original_ids.
+            quick_batch = set()
+            long_batch = set(pending_long)
+            include_original_ids = set(both_pending)
+        else:  # "both"
+            # Both: Quick handles songs pending Quick but not Long. Songs pending both are
+            # handled entirely inside the Long batch (original plus variations), so they never
+            # enter the Quick loop and are never scanned twice.
+            quick_batch = set(quick_only)
+            long_batch = set(pending_long)
+            include_original_ids = set(both_pending)
+
+        if not quick_batch and not long_batch:
+            raise PipelineAbort(self._tr("no_pending_songs_msg"))
+
+        if config.get("mode_audfprint"):
+            use_full, folders, _db_mismatch = self._load_pklz_selection()
+            if use_full:
+                pklz_targets = [""]
             else:
-                self._run_quick_mode(all_targets, processed_set, temp_dir_path)
-        finally:
-            force_clean_directory(sys_temp_dir, recreate=False)
+                pklz_targets = list(folders)
+                if not pklz_targets:
+                    raise PipelineAbort(self._tr("pklz_selection_required"))
+        else:
+            # Audfprint disabled: a single "no-op" target, so the mode loop below still runs
+            # exactly once per mode instead of needing a separate no-PKLZ code path.
+            pklz_targets = [""]
 
-        self._log("")
-        self._log(self._tr("log_all_tasks_complete"))
+        if len(pklz_targets) > 1 and scan_mode in ("long", "both") and long_batch:
+            self._log(self._tr("log_long_mode_multi_target_warning", count=len(pklz_targets)))
+
+        orig_mb = config.get("mode_musicbrainz")
+        orig_at = config.get("mode_audiotag")
+        orig_sz = config.get("mode_shazam")
+        orig_suppress = self._suppress_config_saves
+        # Held for the whole run: the per-target mode toggles and PKLZ folder override that
+        # _run_pipeline flips into config_data are runtime-only and must never reach
+        # config.json. See _save_config_to_disk.
+        self._suppress_config_saves = True
+        try:
+            self._log(self._tr("log_found_files", count=len(all_files), mode=scan_mode.upper()))
+
+            for mode in ("quick", "long"):
+                mode_pending = quick_batch if mode == "quick" else long_batch
+                if not mode_pending:
+                    continue
+
+                # additional_modes_done lives inside this loop iteration, not outside it, so
+                # Quick and Long each get their own independent additional-modes pass: under
+                # "both" they process disjoint song sets and each needs its own coverage.
+                additional_modes_done = False
+                completed_sets = []
+
+                for pklz_target in pklz_targets:
+                    folder_arg = "" if pklz_target == "" else pklz_target
+                    run_additional_here = not additional_modes_done
+
+                    completed = self._run_pipeline(
+                        pending_files=mode_pending,
+                        mode=mode,
+                        additional_modes=run_additional_here,
+                        pklz_folder_arg=folder_arg,
+                        commit_processed=False,
+                        include_original_ids=(include_original_ids if mode == "long" else None),
+                    )
+                    completed_sets.append(completed)
+
+                    if run_additional_here and completed:
+                        # First-successful-target rule (see the module notes on additional
+                        # modes): the target's completed set only counts as "successful" here,
+                        # so a target that loaded PKLZ files but crashed mid-scan does not
+                        # falsely claim the additional-modes pass. The next target gets a
+                        # chance instead.
+                        additional_modes_done = True
+                        if len(completed) < len(mode_pending):
+                            # Known limitation: this is a per-target rule, not a per-song one.
+                            # A target can succeed for some songs and fail for others; the
+                            # failed songs get Audfprint coverage from later targets, but no
+                            # additional-modes coverage until a later SESSION happens to pick
+                            # them up on its own first successful target. This warning is the
+                            # visible symptom of that gap.
+                            self._log(self._tr(
+                                "log_additional_modes_partial",
+                                completed=len(completed),
+                                total=len(mode_pending),
+                                remaining=len(mode_pending) - len(completed),
+                            ))
+
+                final_completed = set.intersection(*completed_sets) if completed_sets else set()
+
+                # This summary line is deliberately unconditional and always visible (not
+                # gated behind a debug flag): it is the one place in the whole run that states,
+                # in plain language, how many songs actually got marked done in this mode and
+                # whether the write was even attempted. Without it, a silently-skipped write
+                # (the "keep old file" branch of the input_dir mismatch prompt, or a mismatch
+                # that was never prompted for because it was already recorded from an earlier
+                # session) leaves no visible trace anywhere in the console, and the only symptom
+                # is "songs I just scanned still show up as pending" the next time Select
+                # Songs... is opened. See log_input_dir_mismatch_kept / log_input_dir_mismatch_write
+                # for the matching root-cause lines this summary is meant to be read alongside.
+                if self._processed_json_writable.get(mode, True):
+                    existing_processed, _ = self._load_processed_songs(mode)
+                    new_processed = existing_processed | final_completed
+                    self._save_processed_songs(mode, new_processed)
+                    self._log(self._tr("log_marked_processed", mode=mode, count=len(final_completed)))
+                else:
+                    self._log(self._tr("log_marked_processed_skipped", mode=mode, count=len(final_completed)))
+
+                if mode == "long":
+                    # A both-pending song's original was scanned as part of its Long batch
+                    # entry (see include_original_ids / _generate_variations_into_pool): once
+                    # it completes here, it is also Quick-done, so mark it in the Quick JSON at
+                    # the same moment. Under scan_mode == "quick" this branch never runs
+                    # (mode_pending for "long" is empty), so the Quick-only session correctly
+                    # leaves the Long JSON untouched.
+                    newly_quick_done = final_completed & include_original_ids
+                    if newly_quick_done:
+                        if self._processed_json_writable.get("quick", True):
+                            existing_quick, _ = self._load_processed_songs("quick")
+                            new_quick = existing_quick | newly_quick_done
+                            self._save_processed_songs("quick", new_quick)
+                            self._log(self._tr("log_marked_processed", mode="quick",
+                                                count=len(newly_quick_done)))
+                        else:
+                            self._log(self._tr("log_marked_processed_skipped", mode="quick",
+                                                count=len(newly_quick_done)))
+
+            self._log("")
+            self._log(self._tr("log_all_tasks_complete"))
+        finally:
+            config["mode_musicbrainz"] = orig_mb
+            config["mode_audiotag"] = orig_at
+            config["mode_shazam"] = orig_sz
+            self._recompute_command()
+            self._suppress_config_saves = orig_suppress
+
+    def _run_pipeline(self, pending_files, mode, additional_modes=True, pklz_folder_arg="",
+                      commit_processed=False, include_original_ids=None):
+        """
+        pending_files: the set of file IDs this pass should attempt. The orchestrator has
+                       already walked input_dir, computed the mode's pending set, applied the
+                       scan_mode filter, and done the include-original bookkeeping;
+                       _run_pipeline does not re-walk input_dir.
+        mode: "quick" or "long".
+        additional_modes: whether MusicBrainz/AudioTag/Shazam should run on this pass.
+        pklz_folder_arg: "" for full database, "<name>" for a specific subfolder.
+        commit_processed: if True, _run_pipeline merges its returned completed set into the
+                          on-disk processed JSON itself before returning. If False, the caller
+                          is responsible for doing so, after all PKLZ targets have been
+                          attempted. Defaults to False because the orchestrator is the only
+                          real caller and it always defers; the True path is kept for
+                          potential single-shot callers and for debugging.
+        include_original_ids: only meaningful for mode == "long". The set of file IDs whose
+                          Long-batch pool entry must also include the original unmodified audio
+                          alongside its tempo/pitch variations. The orchestrator computes this
+                          from scan_mode and the pending sets. None is treated as "empty set" so
+                          quick-mode callers can omit it.
+
+        Note on sys_temp_dir: because the orchestrator calls _run_pipeline once per PKLZ target
+        per mode, a sys_temp_dir created inside _run_pipeline is created and destroyed once per
+        target, matching the original code's per-call lifetime but now with one call per
+        target. This is deliberate: it keeps all tempfile lifetimes scoped to a single target's
+        work, so a failure mid-target cannot leak a system-temp directory into the next
+        target's run, and it mirrors the original single-call behavior exactly. The cost is a
+        mkdtemp/rmtree pair per target, which is negligible compared to the ffmpeg work done in
+        that target.
+        """
+        orig_mb = self.config_data.get("mode_musicbrainz")
+        orig_at = self.config_data.get("mode_audiotag")
+        orig_sz = self.config_data.get("mode_shazam")
+        orig_folder = self._runtime_pklz_folder
+
+        # Additional-modes toggling and the PKLZ folder override both go through config_data
+        # directly, not the tk.BooleanVars: compute_werzatsong_cmd() reads from config_data,
+        # and _sync_widgets_to_config() (the only bridge from the GUI vars to config_data) is
+        # not on this code path. Flipping the BooleanVars here would silently have no effect on
+        # the command that actually runs.
+        if not additional_modes:
+            self.config_data["mode_musicbrainz"] = False
+            self.config_data["mode_audiotag"] = False
+            self.config_data["mode_shazam"] = False
+        self._runtime_pklz_folder = pklz_folder_arg
+        self._recompute_command()
+        try:
+            # sys_temp_dir is created and destroyed inside this call, so it lives for exactly
+            # one PKLZ target's worth of work. See the docstring above for why this matches the
+            # original behavior despite being called N times now.
+            sys_temp_dir = tempfile.mkdtemp()
+            try:
+                input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+                temp_dir_path = os.path.join(input_dir, TEMP_STAGING_DIRNAME)
+                processed_set, _mismatch = self._load_processed_songs(mode)
+                if mode == "quick":
+                    completed = self._run_quick_mode(pending_files, processed_set, temp_dir_path)
+                else:
+                    completed = self._run_long_mode(pending_files, processed_set, temp_dir_path,
+                                                    sys_temp_dir, pklz_folder_arg,
+                                                    include_original_ids or set())
+                if commit_processed:
+                    self._save_processed_songs(mode, processed_set | completed)
+                return completed
+            finally:
+                force_clean_directory(sys_temp_dir, recreate=False)
+        finally:
+            self.config_data["mode_musicbrainz"] = orig_mb
+            self.config_data["mode_audiotag"] = orig_at
+            self.config_data["mode_shazam"] = orig_sz
+            self._runtime_pklz_folder = orig_folder
+            self._recompute_command()
 
     def _convert_non_mp3_files_to_mp3(self, input_dir):
         """Converts every non-mp3 audio file under input_dir to the highest-quality mp3
-        ffmpeg can produce, replacing the original, and fixes up any PROCESSED.txt line that
-        referenced the old path/extension so it keeps pointing at the right file. The
-        conversion is atomic per file (encodes to a temp file, then renames, then deletes the
-        original only on success), so an interrupted/force-stopped run never leaves a
-        half-converted pair behind: the original stays untouched and any leftover temp file
-        is cleaned up and retried on the next run."""
+        ffmpeg can produce, replacing the original, and fixes up any processed-songs JSON
+        entry that referenced the old path/extension so it keeps pointing at the right file
+        (see _rewrite_processed_json_extensions). The conversion is atomic per file (encodes
+        to a temp file, then renames, then deletes the original only on success), so an
+        interrupted/force-stopped run never leaves a half-converted pair behind: the original
+        stays untouched and any leftover temp file is cleaned up and retried on the next run."""
         if shutil.which("ffmpeg") is None:
             return  # let the rest of the pipeline surface the missing-ffmpeg error normally
 
@@ -2625,55 +4120,72 @@ class WerZatSongGUI(tk.Tk):
                         pass
 
         if renamed:
-            self._rewrite_processed_extensions(renamed)
+            self._rewrite_processed_json_extensions(renamed)
         if converted:
             self._log(self._tr("log_convert_done", count=converted))
 
-    @staticmethod
-    def _rewrite_processed_extensions(renamed):
+    def _rewrite_processed_json_extensions(self, renamed):
         """renamed: old relative path -> new relative path (same folder, .mp3 extension).
-        Rewrites every PROCESSED.txt line (bare "path", "path|quick", or "path|long") that
-        referenced an old path so it points at the converted file instead."""
-        if not os.path.exists(PROCESSED_FILE):
+        Rewrites the "processed" array inside both mode JSONs so any entry that referenced an
+        old (pre-conversion) path now points at the converted file instead. Respects the same
+        input_dir mismatch guard as _save_processed_songs (via
+        _processed_json_input_dir_mismatch): if a JSON's stored input_dir does not match the
+        current one, the rewrite is skipped for that file and a [WARNING]-tagged line is
+        logged, so a run under a mismatched input_dir can never corrupt a JSON whose paths
+        refer to a different folder. The renamed files will simply be re-scanned on the next
+        run under the correct input directory."""
+        if not renamed:
             return
-        try:
-            with open(PROCESSED_FILE, "r", encoding="utf-8") as f:
-                lines = [line.rstrip("\n") for line in f]
-        except Exception:
-            return
-
-        changed = False
-        new_lines = []
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                new_lines.append(line)
+        current_input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        for mode in ("quick", "long"):
+            path = self._processed_songs_path(mode)
+            mismatch, stored_input_dir = self._processed_json_input_dir_mismatch(path)
+            if mismatch:
+                self._log(self._tr("log_rewrite_extensions_skipped", file=path,
+                                    old_dir=stored_input_dir, new_dir=current_input_dir))
                 continue
-            if stripped.endswith("|quick") or stripped.endswith("|long"):
-                path_part, _, suffix = stripped.rpartition("|")
-            else:
-                path_part, suffix = stripped, None
-            if path_part in renamed:
-                new_path = renamed[path_part]
-                new_lines.append(f"{new_path}|{suffix}" if suffix else new_path)
-                changed = True
-            else:
-                new_lines.append(line)
+            data = load_json_file(path, None)
+            if not isinstance(data, dict):
+                continue
+            processed_list = data.get("processed")
+            if not isinstance(processed_list, list):
+                continue
+            changed = False
+            new_list = []
+            for entry in processed_list:
+                if entry in renamed:
+                    new_list.append(renamed[entry])
+                    changed = True
+                else:
+                    new_list.append(entry)
+            if changed:
+                data["processed"] = new_list
+                data["input_dir"] = current_input_dir
+                atomic_write_json(path, data)
 
-        if changed:
-            try:
-                with open(PROCESSED_FILE, "w", encoding="utf-8") as f:
-                    f.write("\n".join(new_lines) + ("\n" if new_lines else ""))
-            except Exception:
-                pass
-
-    def _run_long_mode(self, all_targets, processed_set, temp_dir_path, sys_temp_dir):
-        pending_files = [(fid, path) for fid, path in all_targets
-                          if f"{fid}|long" not in processed_set and fid not in processed_set]
+    def _run_long_mode(self, all_targets, processed_set, temp_dir_path, sys_temp_dir,
+                       pklz_folder_arg="", include_original_ids=None):
+        """all_targets: relative-path IDs already selected by the orchestrator for this Long
+        pass (scan_mode filtered, this PKLZ target's turn). processed_set: the mode's on-disk
+        processed set, re-checked here defensively (a file already in it is skipped even if
+        the caller's set math somehow included it), though the primary filtering now happens
+        in _orchestrate_pipeline. pklz_folder_arg is not used directly here (it is already
+        baked into WERZATSONG_CMD via the _runtime_pklz_folder mechanism in _run_pipeline); it
+        is accepted for symmetry with the rest of the pipeline and to make the per-target
+        nature of the call explicit at the call site. include_original_ids is the set of file
+        IDs whose Long-batch pool entry must also include the original, unmodified audio file
+        alongside its tempo/pitch variations (see _generate_variations_into_pool's
+        include_original parameter); None is treated as an empty set. Returns a set of
+        completed file IDs. Does not write to disk: the caller (_run_pipeline) owns
+        committing, once every PKLZ target for this mode has been attempted."""
+        include_original_ids = include_original_ids or set()
+        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        pending_files = [(fid, os.path.join(input_dir, fid)) for fid in all_targets
+                          if fid not in processed_set]
 
         if not pending_files:
             self._log(self._tr("log_no_pending_long"))
-            return
+            return set()
 
         self._log(self._tr("log_pending_count_long", count=len(pending_files)))
 
@@ -2686,12 +4198,21 @@ class WerZatSongGUI(tk.Tk):
         pool_dir = os.path.join(temp_dir_path, "pool")
         os.makedirs(pool_dir, exist_ok=True)
 
-        # Rolling pool of not-yet-dispatched tempo variations, in generation order, plus
-        # per-file progress so a file is only marked processed once *every* one of its
-        # variations has actually been included in a successfully-dispatched batch (its
-        # tail may end up merged into the next file's batch: see compute_batch_sizes).
+        # Rolling pool of not-yet-dispatched tempo variations (plus, for a both-pending song,
+        # its original), in generation order, plus per-file progress so a file is only marked
+        # completed once every one of its variations (and its original, if included) has
+        # actually been included in a batch that _run_task reported as successful (returncode
+        # 0). "dispatched" is only ever advanced AFTER a batch succeeds (see dispatch() below):
+        # this is deliberate, and must not be moved back to "advance on send, gate only the
+        # completed_ids update on the result". A song's variations very often span two batches
+        # (40 default variations vs. VARIATION_CHUNK_SIZE=30), so advancing "dispatched"
+        # unconditionally before the run would let a song whose first batch failed get marked
+        # complete anyway, as soon as its second batch (containing only the remainder) happened
+        # to succeed, even though part of its data was never actually scanned successfully.
+        # Gating the advance itself on success closes that gap.
         pool = []
         progress = {}
+        completed_ids = set()
         batch_counter = 0
 
         def dispatch(batch_items):
@@ -2703,31 +4224,27 @@ class WerZatSongGUI(tk.Tk):
             for _, src_path in batch_items:
                 shutil.move(src_path, os.path.join(batch_folder_path, os.path.basename(src_path)))
 
-            counts_in_batch = {}
-            for fid, _ in batch_items:
-                counts_in_batch[fid] = counts_in_batch.get(fid, 0) + 1
-            newly_completed = []
-            for fid, count in counts_in_batch.items():
-                progress[fid]["dispatched"] += count
-                if progress[fid]["dispatched"] >= progress[fid]["total"]:
-                    newly_completed.append(fid)
-
             self._log(self._tr("log_processing_long_batch", num=batch_counter, count=len(batch_items)))
-            # Only the files that become fully complete as a result of *this* batch are
-            # written to PROCESSED.txt, and only after _run_task returns: if Force Stop kills
-            # the run mid-batch, nothing here has been committed yet, so every file involved
-            # (fully or partially) simply gets regenerated from scratch on the next run.
-            pending_lines = [f"{fid}|long" for fid in newly_completed]
-            self._pending_processed_lines = pending_lines
-            self._run_task(batch_folder_name, temp_dir_path)
+            returncode = self._run_task(batch_folder_name, temp_dir_path)
 
-            if pending_lines:
-                with open(PROCESSED_FILE, "a", encoding="utf-8") as f:
-                    for line in pending_lines:
-                        f.write(f"{line}\n")
-                for line in pending_lines:
-                    processed_set.add(line)
-            self._pending_processed_lines = []
+            # A batch only counts as successfully finished when werzatsong.js itself exits 0.
+            # This is a deliberate change from the pre-rework code, which committed
+            # PROCESSED.txt lines unconditionally after _run_task returned, even on a crash or
+            # out-of-memory nonzero exit: that silently marked songs as scanned when they never
+            # actually were. Do not "fix" this back to unconditional: a nonzero exit here means
+            # every file in this batch (fully or partially dispatched) stays pending and gets
+            # regenerated from scratch on the next PKLZ target (and the next scan, if none
+            # succeed).
+            newly_completed = []
+            if returncode == 0:
+                counts_in_batch = {}
+                for fid, _ in batch_items:
+                    counts_in_batch[fid] = counts_in_batch.get(fid, 0) + 1
+                for fid, count in counts_in_batch.items():
+                    progress[fid]["dispatched"] += count
+                    if progress[fid]["dispatched"] >= progress[fid]["total"]:
+                        newly_completed.append(fid)
+                completed_ids.update(newly_completed)
 
             self._log(self._tr("log_cleanup_temp"))
             force_clean_directory(batch_folder_path, recreate=False)
@@ -2737,7 +4254,9 @@ class WerZatSongGUI(tk.Tk):
         for idx, (file_id, full_path) in enumerate(pending_files):
             is_last_file = (idx == len(pending_files) - 1)
 
-            generated = self._generate_variations_into_pool(full_path, file_id, tempos, pool_dir, sys_temp_dir)
+            generated = self._generate_variations_into_pool(
+                full_path, file_id, tempos, pool_dir, sys_temp_dir,
+                include_original=(file_id in include_original_ids))
             progress[file_id] = {"total": len(generated), "dispatched": 0}
             for item in generated:
                 pool.append((file_id, item))
@@ -2759,59 +4278,70 @@ class WerZatSongGUI(tk.Tk):
                 pool = []
 
         force_clean_directory(temp_dir_path, recreate=False)
+        return completed_ids
 
-    def _run_quick_mode(self, all_targets, processed_set, temp_dir_path):
-        pending_files = [(fid, path) for fid, path in all_targets
-                          if f"{fid}|quick" not in processed_set and fid not in processed_set]
+    def _run_quick_mode(self, pending_files, processed_set, temp_dir_path):
+        """pending_files: relative-path IDs already selected by the orchestrator for this pass
+        (already scan_mode filtered, already restricted to this PKLZ target's turn).
+        processed_set: the mode's on-disk processed set, re-checked here defensively, same
+        rationale as _run_long_mode. Returns a set of completed file IDs. Does not write to
+        disk: the caller (_run_pipeline) owns committing."""
+        input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
+        pending = [fid for fid in pending_files if fid not in processed_set]
 
-        if not pending_files:
+        if not pending:
             self._log(self._tr("log_no_pending"))
-            return
+            return set()
 
-        self._log(self._tr("log_pending_count", count=len(pending_files)))
+        self._log(self._tr("log_pending_count", count=len(pending)))
         force_clean_directory(temp_dir_path, recreate=True)
 
-        batch_sizes = compute_batch_sizes(len(pending_files), QUICK_BATCH_CHUNK_SIZE, MAX_FILES_PER_BATCH_HARD_LIMIT)
+        completed_ids = set()
+        batch_sizes = compute_batch_sizes(len(pending), QUICK_BATCH_CHUNK_SIZE, MAX_FILES_PER_BATCH_HARD_LIMIT)
         total_batches = len(batch_sizes)
         offset = 0
         for batch_num, batch_size in enumerate(batch_sizes, start=1):
-            batch = pending_files[offset:offset + batch_size]
+            batch = pending[offset:offset + batch_size]
             offset += batch_size
 
             batch_folder_name = "quick_batch"
             batch_folder_path = os.path.join(temp_dir_path, batch_folder_name)
             os.makedirs(batch_folder_path, exist_ok=True)
 
-            for file_id, full_path in batch:
+            for file_id in batch:
+                full_path = os.path.join(input_dir, file_id)
                 safe_filename = file_id.replace(os.sep, "___")
                 shutil.copy2(full_path, os.path.join(batch_folder_path, safe_filename))
 
             self._log(self._tr("log_processing_batch", num=batch_num, total=total_batches))
-            # Quick mode only writes these lines to disk AFTER _run_task succeeds below, so
-            # there's nothing to roll back yet if Force Stop fires here: this is tracked
-            # anyway for symmetry with long mode, in case that ordering ever changes.
-            self._pending_processed_lines = [f"{file_id}|quick" for file_id, _ in batch]
-            self._run_task(batch_folder_name, temp_dir_path)
+            returncode = self._run_task(batch_folder_name, temp_dir_path)
 
-            with open(PROCESSED_FILE, "a", encoding="utf-8") as f:
-                for file_id, _ in batch:
-                    f.write(f"{file_id}|quick\n")
-            self._pending_processed_lines = []
+            # See the matching comment in _run_long_mode's dispatch(): a batch only counts as
+            # successfully finished when werzatsong.js itself exits 0. Do not "fix" this back
+            # to unconditional; a nonzero exit here means the batch's songs stay pending and
+            # are retried on the next PKLZ target (and the next scan, if none succeed).
+            if returncode == 0:
+                completed_ids.update(batch)
 
             self._log(self._tr("log_cleanup_temp"))
             force_clean_directory(batch_folder_path, recreate=False)
             self._log(self._tr("log_batch_done", num=batch_num))
 
         force_clean_directory(temp_dir_path, recreate=False)
+        return completed_ids
 
     def _run_task(self, subfolder, source_root):
+        """Runs werzatsong.js against one already-staged batch folder. Returns the process's
+        return code (0 = success) so callers (_run_quick_mode / _run_long_mode) can gate
+        whether this batch's files count as actually completed. Returns -1 for the "source
+        folder missing" early-exit path, since that also means the batch never ran."""
         force_clean_directory(INTERNAL_INPUT_FOLDER, recreate=True)
         force_clean_directory(INTERNAL_TEMP_FOLDER, recreate=False)
 
         src = os.path.join(source_root, subfolder)
         if not os.path.exists(src):
             self._log(self._tr("log_source_folder_missing", path=src))
-            return
+            return -1
 
         for item in os.listdir(src):
             s = os.path.join(src, item)
@@ -2848,13 +4378,27 @@ class WerZatSongGUI(tk.Tk):
                 self._log(f"   - {lf}")
 
         force_clean_directory(INTERNAL_INPUT_FOLDER, recreate=True)
+        return returncode
 
-    def _generate_variations_into_pool(self, input_file_path, file_id, tempos, pool_dir, sys_temp_dir):
+    def _generate_variations_into_pool(self, input_file_path, file_id, tempos, pool_dir, sys_temp_dir,
+                                       include_original=False):
         """Generates every tempo/pitch variation of one file directly into the shared rolling
         pool directory (used by _run_long_mode), returning the list of successfully-generated
         absolute paths. Filenames are prefixed by the file's own sanitized relative path
         (not just its basename), so two different input files that happen to share the same
-        filename in different subfolders never collide while sitting in the same pool."""
+        filename in different subfolders never collide while sitting in the same pool.
+
+        include_original: when True, also copies the original, unmodified input file into the
+        pool (a straight shutil.copy2, never an ffmpeg re-encode: the whole point of including
+        it is to scan the file exactly as it is), under the same safe-id-based name the
+        variations use as their prefix (e.g. "subdir___song.mp3"). This is used for a
+        "both-pending" song (pending both Quick and Long, see _orchestrate_pipeline's
+        scan_mode routing): since Long mode is about to include that song anyway, its original
+        scan happens here, folded into the Long batch, instead of a separate Quick pass. The
+        copy happens before the variation loop so a copy failure is reported immediately and
+        in order, and so the per-variation progress counter below still reads as "N of M
+        variations" (M = len(tempos)), not "N of M+1". The original's pool name never carries
+        a "_t..._p..." suffix, so it can never collide with a variation's name."""
         filename = os.path.basename(input_file_path)
 
         if shutil.which("ffmpeg") is None:
@@ -2864,6 +4408,16 @@ class WerZatSongGUI(tk.Tk):
 
         safe_id = file_id.replace(os.sep, "___")
         base_name = os.path.splitext(safe_id)[0]
+
+        generated = []
+        if include_original:
+            original_dest = os.path.join(pool_dir, safe_id)
+            try:
+                shutil.copy2(input_file_path, original_dest)
+                generated.append(original_dest)
+            except Exception as e:
+                self._log(self._tr("log_gen_error", file=filename))
+                self._log(str(e))
 
         tasks = [(input_file_path, tempo, pool_dir, base_name, sys_temp_dir) for tempo in tempos]
 
@@ -2885,7 +4439,7 @@ class WerZatSongGUI(tk.Tk):
                     errors.append(value)
                 self._log(self._tr("log_gen_progress", done=completed, total=total))
 
-        generated = [path for path in results if path]
+        generated.extend(path for path in results if path)
         if errors:
             self._log(self._tr("log_gen_error", file=filename))
             for e in errors[:5]:
@@ -2893,6 +4447,327 @@ class WerZatSongGUI(tk.Tk):
         else:
             self._log(self._tr("log_gen_success", total=total, file=filename))
         return generated
+
+    # ------------------------------------------------------------------
+    # Console interactivity: copy / select all / right-click menu
+    # ------------------------------------------------------------------
+
+    def _console_is_at_bottom(self):
+        """True when the console's viewport is showing the very last line."""
+        try:
+            return self.console.yview()[1] >= 0.9999
+        except tk.TclError:
+            return True
+
+    def _console_copy(self):
+        try:
+            self.console.event_generate("<<Copy>>")
+        except tk.TclError:
+            pass
+
+    def _console_select_all(self):
+        try:
+            self.console.tag_add("sel", "1.0", "end-1c")
+            self.console.mark_set("insert", "1.0")
+        except tk.TclError:
+            pass
+
+    def _console_copy_event(self, _event=None):
+        # Ctrl+X on the console is treated exactly like Ctrl+C (never cuts).
+        self._console_copy()
+        return "break"
+
+    def _console_select_all_event(self, _event=None):
+        self._console_select_all()
+        return "break"
+
+    def _console_context_menu(self, event):
+        menu = tk.Menu(self, tearoff=0)
+        try:
+            has_selection = bool(self.console.tag_ranges("sel"))
+        except tk.TclError:
+            has_selection = False
+
+        menu.add_command(
+            label=self.gui_strings.get("ctx_copy", "Copy"),
+            command=self._console_copy,
+            state="normal" if has_selection else "disabled"
+        )
+        menu.add_command(
+            label=self.gui_strings.get("ctx_select_all", "Select All"),
+            command=self._console_select_all
+        )
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+        return "break"
+
+    # ----------------------------------------------------------------------
+    # Entry widgets: Cut / Copy / Paste / Select All (right-click + Ctrl+A)
+    # ----------------------------------------------------------------------
+
+    def _entry_select_all(self, widget):
+        try:
+            widget.selection_range(0, "end")
+            widget.icursor("end")
+        except tk.TclError:
+            pass
+
+    def _walk_widgets(self, widget):
+        """Yields every widget in the tree, starting from `widget`."""
+        yield widget
+        for child in widget.winfo_children():
+            yield from self._walk_widgets(child)
+
+    def _enable_entry_shortcuts(self):
+        """Wires up Cut/Copy/Paste/Select All/Undo/Redo for every Entry widget,
+        via both keyboard shortcuts and a right-click context menu.
+
+        Undo/redo are custom-built: tk.Entry/ttk.Entry have no native undo stack
+        the way tk.Text does. We detect changes after each keystroke (via
+        <KeyRelease>, which fires after the entry's own insertion handler) and
+        push the *previous* value onto the undo stack, debounced so a fast
+        typing burst collapses into a single undo step. A new edit after an
+        undo clears the redo branch (standard editor behaviour).
+
+        Bound per-widget at install time (widget bindings are checked before
+        class bindings, and each returns "break" so the class fallback doesn't
+        double-fire). The class-level bindings are registered afterwards as a
+        safety net for any Entry created later.
+
+        Must be called AFTER every Entry in the UI has been created (see
+        _build_full_ui), because we walk the widget tree once."""
+        if getattr(self, "_entry_undo_installed", False):
+            return
+        self._entry_undo_installed = True
+        self._entry_undo_state = {}
+
+        MAX_UNDO_STEPS = 200
+        UNDO_DEBOUNCE_SECONDS = 0.7
+
+        def get_state(entry):
+            state = self._entry_undo_state.get(entry)
+            if state is None:
+                state = {
+                    "undo": [],
+                    "redo": [],
+                    "last_value": None,
+                    "last_time": 0.0,
+                    "restoring": False,
+                }
+                self._entry_undo_state[entry] = state
+            return state
+
+        def _read_value(entry):
+            try:
+                return entry.get()
+            except tk.TclError:
+                return None
+
+        def _write_value(entry, value):
+            """Rewrite the entry's content. Returns True on success, False on failure."""
+            try:
+                entry.delete(0, "end")
+                entry.insert(0, value)
+                entry.icursor("end")
+                entry.selection_clear()
+                return True
+            except tk.TclError:
+                return False
+
+        def _record_change(entry):
+            """Compare the entry's current content to what we last observed. If it
+            changed, and we're outside the debounce window, push the *previous*
+            value onto the undo stack. Called from <KeyRelease> (fires after the
+            entry's built-in insertion handler, so `entry.get()` is up-to-date)
+            and from <<Paste>> / <<Cut>> hooks."""
+            if not entry.winfo_exists():
+                return
+            state = get_state(entry)
+            if state["restoring"]:
+                return  # we're the ones rewriting the entry; ignore it
+            current = _read_value(entry)
+            if current is None:
+                return
+            last = state["last_value"]
+            if last is None:
+                # First observation: just record the baseline, nothing to push.
+                state["last_value"] = current
+                state["last_time"] = time.time()
+                return
+            if current == last:
+                return  # no actual text change (modifier key, arrow, click, etc.)
+            now = time.time()
+            if now - state["last_time"] >= UNDO_DEBOUNCE_SECONDS:
+                # Start of a fresh burst: push the value we were showing *before*
+                # this burst began.
+                if not state["undo"] or state["undo"][-1] != last:
+                    state["undo"].append(last)
+                    if len(state["undo"]) > MAX_UNDO_STEPS:
+                        state["undo"].pop(0)
+                state["redo"].clear()
+            state["last_value"] = current
+            state["last_time"] = now
+
+        # -- event handlers -------------------------------------------------
+
+        def on_key_release(event):
+            _record_change(event.widget)
+
+        def on_focus_in(event):
+            """Reset the baseline whenever the user focuses an entry, so undo
+            never reaches back into the previous focus session."""
+            entry = event.widget
+            if not entry.winfo_exists():
+                return
+            state = get_state(entry)
+            state["undo"].clear()
+            state["redo"].clear()
+            state["last_value"] = _read_value(entry)
+            state["last_time"] = 0.0
+
+        def do_undo(entry):
+            if not entry.winfo_exists():
+                self._entry_undo_state.pop(entry, None)
+                return
+            state = get_state(entry)
+            if not state["undo"]:
+                return  # nothing to undo: silently do nothing
+
+            previous = _read_value(entry)
+            if previous is None:
+                return  # can't read current content: abort rather than corrupt history
+
+            target = state["undo"][-1]
+            state["restoring"] = True
+            try:
+                if not _write_value(entry, target):
+                    # Mutation failed: put the widget back how it was. The undo
+                    # value stays on the stack so a retry can still succeed.
+                    _write_value(entry, previous)
+                    return
+                # Only now, after a successful mutation, is it safe to consume
+                # the history entry and record where we came from.
+                state["undo"].pop()
+                if not state["redo"] or state["redo"][-1] != previous:
+                    state["redo"].append(previous)
+                    if len(state["redo"]) > MAX_UNDO_STEPS:
+                        state["redo"].pop(0)
+                state["last_value"] = target
+            finally:
+                state["restoring"] = False
+            # Force the next keystroke to snapshot as a fresh burst, rather than
+            # being debounced into the pre-undo one.
+            state["last_time"] = 0.0
+
+        def do_redo(entry):
+            if not entry.winfo_exists():
+                self._entry_undo_state.pop(entry, None)
+                return
+            state = get_state(entry)
+            if not state["redo"]:
+                return  # nothing to redo: silently do nothing
+
+            previous = _read_value(entry)
+            if previous is None:
+                return
+
+            target = state["redo"][-1]
+            state["restoring"] = True
+            try:
+                if not _write_value(entry, target):
+                    _write_value(entry, previous)
+                    return  # redo value stays on the stack for a retry
+                state["redo"].pop()
+                if not state["undo"] or state["undo"][-1] != previous:
+                    state["undo"].append(previous)
+                    if len(state["undo"]) > MAX_UNDO_STEPS:
+                        state["undo"].pop(0)
+                state["last_value"] = target
+            finally:
+                state["restoring"] = False
+            state["last_time"] = 0.0
+
+        def on_undo(event):
+            do_undo(event.widget)
+            return "break"
+
+        def on_redo(event):
+            do_redo(event.widget)
+            return "break"
+
+        def on_select_all(event):
+            self._entry_select_all(event.widget)
+            return "break"
+
+        def show_context_menu(event):
+            widget = event.widget
+            state = get_state(widget)
+            menu = tk.Menu(widget, tearoff=0)
+
+            menu.add_command(
+                label=self.gui_strings.get("ctx_undo", "Undo"),
+                command=lambda w=widget: do_undo(w),
+                state=("normal" if state["undo"] else "disabled"),
+            )
+            menu.add_command(
+                label=self.gui_strings.get("ctx_redo", "Redo"),
+                command=lambda w=widget: do_redo(w),
+                state=("normal" if state["redo"] else "disabled"),
+            )
+            menu.add_separator()
+            menu.add_command(label=self.gui_strings.get("ctx_cut", "Cut"),
+                            command=lambda w=widget: w.event_generate("<<Cut>>"))
+            menu.add_command(label=self.gui_strings.get("ctx_copy", "Copy"),
+                            command=lambda w=widget: w.event_generate("<<Copy>>"))
+            menu.add_command(label=self.gui_strings.get("ctx_paste", "Paste"),
+                            command=lambda w=widget: w.event_generate("<<Paste>>"))
+            menu.add_separator()
+            menu.add_command(label=self.gui_strings.get("ctx_select_all", "Select All"),
+                            command=lambda w=widget: self._entry_select_all(w))
+
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+            return "break"
+
+        # -- per-widget bindings (primary path) -----------------------------
+        bound = 0
+        for widget in self._walk_widgets(self):
+            if widget.winfo_class() not in ("Entry", "TEntry"):
+                continue
+            bound += 1
+            widget.bind("<Button-3>", show_context_menu, add="+")
+            widget.bind("<Control-a>", on_select_all, add="+")
+            widget.bind("<Control-A>", on_select_all, add="+")
+            widget.bind("<Control-z>", on_undo, add="+")
+            widget.bind("<Control-Z>", on_undo, add="+")
+            widget.bind("<Control-y>", on_redo, add="+")
+            widget.bind("<Control-Y>", on_redo, add="+")
+            # <KeyRelease> (not <KeyPress>): the entry's own insertion handler
+            # runs on KeyPress, so at KeyRelease time the new value is already
+            # in the widget and we can compare it to the previous observation.
+            widget.bind("<KeyRelease>", on_key_release, add="+")
+            widget.bind("<FocusIn>", on_focus_in, add="+")
+            # Seed the baseline right now, so the very first keystroke after
+            # launch (before any FocusIn has fired) is still undoable.
+            try:
+                get_state(widget)["last_value"] = widget.get()
+            except tk.TclError:
+                pass
+
+        # -- class-level fallback (for any Entry created later) -------------
+        for cls in ("TEntry", "Entry"):
+            self.bind_class(cls, "<Control-z>", on_undo, add="+")
+            self.bind_class(cls, "<Control-Z>", on_undo, add="+")
+            self.bind_class(cls, "<Control-y>", on_redo, add="+")
+            self.bind_class(cls, "<Control-Y>", on_redo, add="+")
+            self.bind_class(cls, "<Control-a>", on_select_all, add="+")
+            self.bind_class(cls, "<Control-A>", on_select_all, add="+")
+            self.bind_class(cls, "<KeyRelease>", on_key_release, add="+")
+            self.bind_class(cls, "<Button-3>", show_context_menu, add="+")
 
     # ------------------------------------------------------------------
     # Shutdown

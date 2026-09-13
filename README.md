@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 1.4.0](https://img.shields.io/badge/Version-1.4.0-orange)
+![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-orange)
 
 ![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
@@ -31,7 +31,7 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 - [Using WerZatSonGUI](#using-werzatsongui)
 - [Search Modes Explained](#search-modes-explained)
 - [Running a Scan: Quick vs. Long Mode](#running-a-scan-quick-vs-long-mode)
-- [Processed Files & PROCESSED.txt](#processed-files--processedtxt)
+- [Processed Songs and Selection Dialogs](#processed-songs-and-selection-dialogs)
 - [Where to Find Results](#where-to-find-results)
 - [Log Format](#log-format)
 
@@ -90,7 +90,11 @@ This document explains how to install WerZatSonGUI, set it up for the first time
 - Support for entire **Song Databases** thanks to a **batch-scanning engine,** which lets you add as many audio files as you want to the program: it will automatically scan at most 20-30 at a time, as efficiently as possible (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below). Links to the community-ran [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) and [@user-QLostwave (Q)](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) Song Databases are included in the program under the **Add Audio Files...** section.
 - A built-in script by **Mystic65**, which can automatically generate and search dozens of **tempo/pitch-shifted variations** of each file, to help catch songs that were sped up, slowed down, or pitched differently (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below).
 - A **base WerZatSong rework** and a **logs rework** (see [*Log Format*](#log-format) below) by **EierkuchenHD.**
-- A new **Processed files...** section. If you have a significant amount of songs in your input folder, you can now easily decide which ones you want to run with WerZatSonGUI, **without** having to move anything out of that folder (see [*Processed Files & PROCESSED.txt*](#processed-files--processedtxt) below).
+- Two **Processed Songs** JSON files (one per scan mode) replace the old single `PROCESSED.txt`. If you have a significant amount of songs in your input folder, you can now easily decide which ones you want to run with WerZatSonGUI through the **Select Songs...** dialog, **without** having to hand-edit a text file or move anything out of that folder (see [*Processed Songs and Selection Dialogs*](#processed-songs-and-selection-dialogs) below).
+- A **Scan Mode** switch (**Quick only**, **Long only**, **Both**) that decides which modes run in the current session, replacing the old "generate different tempos" checkbox with a single-click full-scan option (see [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below).
+- A **Select Songs...** dialog: a tree of your input folder with a Quick/Long checkbox per song, letting you plan exactly which songs are candidates for each mode.
+- A **Select PKLZ Folders...** dialog: a tree of your Audfprint database subfolders, letting you restrict a scan to specific fingerprint collections instead of always searching the whole database. Using more than one subfolder makes Long Mode regenerate its variations once per subfolder, which the console warns you about.
+- A **Copy / Move** choice inside the **Add PKLZ Files...** and **Add Audio Files...** dialogs. Move (the default) deletes the source files after a successful copy; Copy leaves them where they are.
 - Support for **multiple languages** and **translations.** Currently, the supported languages are English, Italian, French and Portuguese (see [*Adding a Language / Translations*](#adding-a-language--translations) below).
 - Support for **light** and **dark** modes.
 
@@ -321,7 +325,7 @@ If you'd rather sidestep the flagged installer entirely, and you already have a 
 
 ## Using WerZatSonGUI
 
-Once setup is complete, WerZatSonGUI opens its full interface every time you launch it. In both windowed and maximized/fullscreen mode, the top action bar (**Add PKLZ Files...**, **Add Audio Files...**, **Processed Files...**, **Force Stop**, **Start WerZatSong**) always stays visible and reachable. If the rest of the interface doesn't fit in the available space (for example with both **API Keys & Webhook** and **Directories** expanded on a smaller screen), the section above the action bar scrolls instead of pushing it off-screen.
+Once setup is complete, WerZatSonGUI opens its full interface every time you launch it. In both windowed and maximized/fullscreen mode, the top action bar (**Add PKLZ Files...**, **Add Audio Files...**, **Open Processed Folder...**, **Force Stop**, **Start WerZatSong**) always stays visible and reachable. If the rest of the interface doesn't fit in the available space (for example with both **API Keys & Webhook** and **Directories** expanded on a smaller screen), the section above the action bar scrolls instead of pushing it off-screen.
 
 ### Header
 
@@ -354,22 +358,25 @@ Four checkboxes to enable or disable **MusicBrainz (AcoustID)**, **AudioTag**, *
 
 ### Advanced Settings
 
-Split into five tabs so related settings are grouped together. Each individual setting has a small **[?]** button to its left with a short explanation, and this section also summarizes what each one does. This whole panel is greyed out while a scan is running.
+Split into eight tabs so related settings are grouped together. Each individual setting has a small **[?]** button to its left with a short explanation, and this section also summarizes what each one does. This whole panel is greyed out while a scan is running.
 
 #### General tab
 
-- **Mark all audio files as processed in:** Useful if you have a lot of files in your input folder, and you want to run only a few specific ones. Marks all audio files in your input folder as **processed** in either **Quick** mode (no additional tempo generation), **Long** mode (original files and additional tempos) or **both** modes, so you can manually delete the lines of the songs you do not want to run by editing **PROCESSED.txt.** Pressing any of the 3 buttons **overwrites** your current PROCESSED.txt file (see [*Processed Files & PROCESSED.txt*](#processed-files--processedtxt) below).
+- **Scan Mode:** a three-way switch, **Quick only**, **Long only** or **Both**, that decides which search modes actually run in the current session. See [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below for what each option does.
+- **Select Songs...** and **Select PKLZ Folders...:** sit side by side above the Scan Mode row, sharing a single **[?]** button to their left. Clicking it opens a small chooser letting you pick which of the two explanations to read. **Select Songs...** opens a dialog listing every song in your Input Directory with a Quick/Long checkbox each, replacing the old "Mark all audio files as processed in" buttons. **Select PKLZ Folders...** opens a dialog listing the subfolders of your Audfprint Database Directory, letting you restrict Audfprint searches to specific ones instead of always searching the whole database (its explanation covers the trade-offs of picking more than one subfolder). See [*Processed Songs and Selection Dialogs*](#processed-songs-and-selection-dialogs) below for both.
 - **Theme:** Changes the visual appearance of the application. Set to **Light,** **Dark,** or **System Default** to automatically match your OS settings.
 - **Language:** Switches the interface between **English** and another supported language. Takes effect immediately, no restart required (see [*Adding a Language / Translations*](#adding-a-language--translations) below if you'd like to help add more).
 
 #### Long Mode tab
 
-- **Enable Long Mode (generate different speeds/tempos for each audio file):** switches scans between **Quick** and **Long** mode. See [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below.
+Whether Long Mode runs at all this session is now decided by the **Scan Mode** switch on the **General tab** above, not by a checkbox on this tab.
+
 - **Negative tempo multipliers** / **Positive tempo multipliers:** the tempo ratios used to generate variations in Long mode (negative = slowed down/pitched down, below `1.0`; positive = sped up/pitched up, above `1.0`). Edit these as a comma-separated list in brackets, e.g. `[0.9, 0.95, 1.05, 1.1]`. Leaving **one** field empty (or `[]`) makes WerZatSonGUI generate variations from only the other array; leaving **both** empty restores the full default set of 40 variations (20 negative + 20 positive).
 
 #### Audfprint tab
 
-- **Use only fingerprints from this subdirectory:** restricts Audfprint mode to a single subfolder of your Audfprint Database Directory instead of searching all of them. Use **Browse...** to pick one, or type its name directly (it must already exist inside the Audfprint Database Directory).
+Picking specific PKLZ subfolders is now done through the **Select PKLZ Folders...** button on the **General tab**, not on this tab; the **[?]** popup next to it explains the trade-offs of selecting more than one subfolder.
+
 - **Set the number of CPU threads to use:** sets how many CPU threads Audfprint mode uses. WerZatSong itself caps this at **16** regardless of what you enter, to help avoid running out of memory; leaving this unchecked lets it use all available threads on your machine automatically.
 - **Set search depth to:** controls how aggressively Audfprint searches for a match, from `1` to `8`. Higher values perform a more thorough "deep search" for low-quality clips, but may significantly increase processing time. Defaults to `4`.
 
@@ -383,12 +390,31 @@ Split into five tabs so related settings are grouped together. Each individual s
 - **Use a custom Webhook name:** overrides the display name your Discord webhook uses when posting, instead of the default "WerZatSong".
 - **Use a custom Webhook image:** overrides the avatar image your Discord webhook uses when posting. The link must start with either `https://cdn.discordapp.com/icons/`, `https://cdn.discordapp.com/app-icons/` or `https://cdn.discordapp.com/avatars/`, or Discord won't recognize it. The image must be in `.webp` format. You can get a correctly formatted link by setting the image as a Discord bot's profile picture and copying the link from there (if necessary, removing any size parameter at the end and changing the extension to `.webp`).
 
+#### Hash Counts tab
+
+- **.pklz Hash Counts Directory:** The folder where hash counts are saved (created automatically if missing). Hash counts are the plain-text files generated for each `.pklz` added to the database when **Create hash counts for each .pklz file added** is enabled: they show every audio file contained in a `.pklz` and how many hashes each one contributed. Use **Browse...** to pick a folder or type its path directly. If the field is left empty, it reverts to the default `hash_tables` folder next to the app.
+- **Create hash counts for each .pklz file added:** When enabled, every `.pklz` file added to the database via **Add PKLZ Files...** will also have a hash count created for it. A hash count is a plain-text file showing every audio file contained in the `.pklz` and how many hashes each one contributed. Hash counts are saved to the configured Hash Counts Directory, preserving the original folder hierarchy.
+
+#### Console tab
+
+- **Console Logs Directory:** The folder where console log dumps produced by **Print console output to log file** are saved (created automatically if missing). Use **Browse...** to pick a folder or type its path directly. If the field is left empty, it reverts to the default `console_logs` folder next to the app.
+- **Print console output to log file:** Writes everything currently shown in the Console to a timestamped `.txt` file inside the Console Logs Directory. The filename follows the pattern `YYYY-MM-DD_HH-MM-SS_v{version}_WZSGUI_CLog.txt`, so successive dumps never overwrite each other. Useful for attaching logs to a bug report or for keeping a record of a scan.
+- **Open crash logs file...:** Opens WerZatSonGUI's own `crash_logs.txt` (the Tee'd stdout/stderr dump from startup). Completely independent from the console logs.
+
+#### .env tab
+
+- **Python Command:** Choose whether WerZatSong should be launched using the plain **python** command or the full path to the Python executable. Use the full path if you have multiple Python installations or if Python is not in your system PATH.
+- **FFmpeg Command:** Choose whether to use the plain **ffmpeg** command or the full path to the FFmpeg executable. Use the full path if FFmpeg is not in your PATH or if you need to force a specific version.
+- **Node Command:** Choose whether to use the plain **node** command or the full path to the Node.js executable. Use the full path if Node is not in your PATH or if you need to force a specific version.
+
 ### Adding Files to Scan
 
 Use **Add Audio Files...** at the bottom of the window to add the songs you want to search for, either by picking individual files or an entire folder. WerZatSonGUI accepts `.mp3`, `.wav`, `.flac` and `.m4a` files. Anything that isn't already an `.mp3` is **automatically converted** to the highest-quality VBR mp3 FFmpeg can produce the moment a scan starts.
 
 > **WARNING: This conversion REPLACES the original file.** 
 > Once a `.wav`/`.flac`/`.m4a` is converted, only the resulting `.mp3` remains in your input folder. Keep a copy elsewhere first if you want to hold on to the original losslessly-encoded (or differently-encoded) file. The conversion is crash-safe (an interrupted run never leaves you with a half-converted or missing file, it just retries cleanly next time), but it is one-way.
+
+Both the **Add PKLZ Files...** and **Add Audio Files...** dialogs have a **Move / Copy** choice at the bottom. **Move** (the default) copies the selected files/folders into the destination, then deletes the originals once the copy succeeds. **Copy** leaves the originals exactly where they were. The choice is saved the moment you click it, so it survives clicking **Cancel**, and it's remembered separately for the Add PKLZ dialog and the Add Audio dialog. If the source you picked turns out to be the destination folder itself, or is inside it, or contains it, the copy still happens but the delete is safely skipped, so a mistaken selection can never delete your data.
 
 ## Search Modes Explained
 
@@ -399,19 +425,37 @@ Use **Add Audio Files...** at the bottom of the window to add the songs you want
 
 ## Running a Scan: Quick vs. Long Mode
 
+Which of these run in a given session is chosen with the **Scan Mode** switch on the **General tab** (**Quick only**, **Long only**, or **Both**, see above):
+
 - **Quick Mode** (the default) searches every pending file exactly as-is, no variations generated.
-- **Long Mode** additionally generates tempo/pitch-shifted variations of each file first (see the **Long Mode tab** above), then searches every variation too. Much more thorough, but much slower, since it's effectively scanning dozens of extra files per song.
+- **Long Mode** additionally generates tempo/pitch-shifted variations of each file first (see the **Long Mode tab** above), then searches every variation too. Much more thorough, but much slower, since it's effectively scanning dozens of extra files per song. For a song that hasn't had a Quick pass yet, its original file is folded into the Long batch too, so a **Long only** session still scans everything even though it never runs the Quick loop.
+- **Both** runs Quick Mode to completion first, then Long Mode, for a single-click full scan at the cost of the longest total run time.
 
 Either way, WerZatSonGUI never hands the whole file list to the underlying engine at once: WerZatSong itself has a **hard limit of 30 files per search**, so everything is split into batches beforehand. Batches normally are of that same number, **30 files** (or, in Long Mode, 30 variations) at a time.
 
 In Quick Mode this is straightforward: 45 pending files becomes a 30/15 split.
 In Long Mode it's a little smarter, because the *number of variations per file* isn't fixed and rarely divides evenly by 30: rather than dispatching a batch of 30 followed by a tiny batch of, say, 3 leftover variations, WerZatSonGUI keeps a running pool of not-yet-searched variations across files and only finalizes a batch's size once it knows how much is actually left to search. Concretely: if file A produces 33 variations, the first 30 are dispatched as soon as they're ready, and the remaining 3 are held and combined with the first 27 variations generated for file B into a second, full batch of 30. And so on for as many files as needed, rather than ever sending out a wasteful near-empty batch. The 30-file hard limit is still always technically internally respected by the program's logic, but you don't have to worry about it anymore.
 
-## Processed Files & PROCESSED.txt
+If you select more than one PKLZ subfolder in the **Select PKLZ Folders...** dialog, Long Mode has to regenerate every tempo/pitch variation from scratch for **each** subfolder in turn (variations are never kept on disk between subfolders, to keep disk usage bounded), so a scan against three subfolders does three times the ffmpeg work of a scan against one. The console prints a `[WARNING]` line before the run starts whenever this is about to happen.
 
-Every file WerZatSonGUI finishes searching (in Quick Mode, Long Mode, or both, depending on which mode(s) it ran under) is recorded as a line in `PROCESSED.txt`, at the root of the WerZatSonGUI folder, so re-running a scan later never searches the same file twice in the same mode. Each line is the file's relative path inside your Input Directory, optionally suffixed with `|quick` or `|long` if it's only been processed in one specific mode rather than both.
+MusicBrainz, AudioTag and Shazam aren't tied to a specific PKLZ subfolder, so each one runs only once per scan mode that actually executes this session, against the first PKLZ subfolder that successfully completes some work. If a subfolder crashes partway through (out of memory, a bad `.pklz`, etc.) for some of its songs, those particular songs get their MusicBrainz/AudioTag/Shazam coverage on a later run instead, and the console prints a `[WARNING]` line noting how many songs were affected.
 
-You can freely hand-edit this file: delete a line (or a whole file) to make WerZatSonGUI search it again next time, or use **Mark all audio files as processed in** (see the **General tab** above) to bulk-mark everything so you can then delete just the handful of lines for files you actually want to (re-)search. Much faster than deleting hundreds of individual lines the other way around.
+A batch only counts as completed once `werzatsong.js` exits with code `0`. If it exits with any other code, every song in that batch is retried on the next PKLZ subfolder, and on the next scan entirely if no subfolder succeeds for it. This is a change from the pre-rework behavior, which used to mark a batch as processed even when the underlying scan had crashed, silently skipping those songs forever.
+
+## Processed Songs and Selection Dialogs
+
+WerZatSonGUI keeps track of which songs have already been scanned using two JSON files under `assets\listsProcessed`: `processed-songs-mode-quick.json` and `processed-songs-mode-long.json`, one per scan mode. A song is listed in a mode's file if it has already been scanned in that mode, or if you've deliberately excluded it; any song **not** listed there is pending for that mode. This replaces the old single `PROCESSED.txt` from earlier versions.
+
+![Song Selection dialog](assets/images/song_selection_dialog.png)
+![PKLZ Folder Selection dialog](assets/images/pklz_selection_dialog.png)
+
+To change which songs are pending, open **Select Songs...** (see the **General tab** above): it shows every song in your Input Directory as a tree, with a **Quick** and a **Long** checkbox on each row. Clicking a folder's checkbox toggles every song inside it at once. This dialog is where the old "Mark all audio files as processed in" workflow now lives, without needing to hand-edit a text file afterwards.
+
+Each JSON file also stores the input directory it was written for. If you later change your **Input Directory** setting, the corresponding file is ignored on read and left untouched on write, so its list survives in case you move the input folder back. The first scan after such a change shows a prompt offering to reset the file to match your current Input Directory (keeping the already-processed entries, just updating the stored path).
+
+If you want to re-search a specific song, open **Select Songs...**, find it, check the box for whichever mode you want to re-run, click **Save**, then start a new scan.
+
+The very first time you launch this version, any existing `PROCESSED.txt` is automatically migrated into the two JSON files above, and the original is kept as `PROCESSED.txt.migrated.bak` in the app folder for reference.
 
 ## Where to Find Results
 
@@ -448,6 +492,6 @@ WerZatSonGUI currently ships with **English**, **Italian**, **French** and **Por
 
 ## Credits
 
-- **WerZatSonGUI v1.4.0** by some random account, with contributions from EierkuchenHD. Testers: EierkuchenHD, Shardanik, VoidGod.
+- **WerZatSonGUI v2.0.0** by some random account, with contributions from EierkuchenHD and VoidGod. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.

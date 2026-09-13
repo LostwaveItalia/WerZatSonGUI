@@ -1,6 +1,6 @@
 # WerZatSonGUI
 ![Plataforma: Windows x64](https://img.shields.io/badge/Plataforma-Windows%20x64-blue)
-![Versão: 1.4.0](https://img.shields.io/badge/Versão-1.4.0-orange)
+![Versão: 2.0.0](https://img.shields.io/badge/Versão-2.0.0-orange)
 
 ![WerZatSonGUI executando uma varredura no modo escuro](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI executando uma varredura no modo claro](../assets/images/gui_screenshot_2.png)
@@ -32,7 +32,7 @@ Este documento explica como instalar o WerZatSonGUI, configurá-lo pela primeira
 - [Usando o WerZatSonGUI](#usando-o-werzatsongui)
 - [Modos de Busca Explicados](#modos-de-busca-explicados)
 - [Executando uma Varredura: Modo Rápido vs. Longo](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo)
-- [Arquivos Processados & PROCESSED.txt](#arquivos-processados--processedtxt)
+- [Músicas Processadas e Janelas de Seleção](#músicas-processadas-e-janelas-de-seleção)
 - [Onde Encontrar os Resultados](#onde-encontrar-os-resultados)
 - [Formato dos Logs](#formato-dos-logs)
 
@@ -91,7 +91,11 @@ Este documento explica como instalar o WerZatSonGUI, configurá-lo pela primeira
 - Suporte para **bancos de dados de músicas inteiros** graças a um **motor de varredura em lote**, que permite adicionar quantos arquivos de áudio você quiser ao programa: ele irá automaticamente varrer no máximo 20-30 por vez, da forma mais eficiente possível (veja [*Executando uma Varredura: Modo Rápido vs. Longo*](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo) abaixo). Links para os bancos de dados comunitários [Lostwave Italia](https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy), [French Lostwaves](https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520) e [@user-QLostwave (Q)](https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW) estão incluídos no programa na seção **Adicionar arquivos de áudio...**.
 - Um script embutido por **Mystic65**, que pode gerar e buscar automaticamente dezenas de **variações de tempo/afinação** de cada arquivo, para ajudar a capturar músicas que foram aceleradas, desaceleradas ou tiveram a afinação alterada (veja [*Executando uma Varredura: Modo Rápido vs. Longo*](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo) abaixo).
 - Um **rework da base do WerZatSong** e um **rework dos logs** (veja [*Formato dos Logs*](#formato-dos-logs) abaixo) por **EierkuchenHD.**
-- Uma nova seção **Arquivos processados...**. Se você tem uma quantidade significativa de músicas em sua pasta de entrada, agora pode decidir facilmente quais deseja executar com o WerZatSonGUI, **sem** ter que mover nada para fora dessa pasta (veja [*Arquivos Processados & PROCESSED.txt*](#arquivos-processados--processedtxt) abaixo).
+- Dois arquivos JSON de **músicas processadas** (um por modo de varredura) substituem o antigo `PROCESSED.txt` único. Se você tem uma quantidade significativa de músicas em sua pasta de entrada, agora pode decidir facilmente quais executar com o WerZatSonGUI através da janela **Selecionar músicas...**, **sem** ter que editar um arquivo de texto manualmente nem mover nada para fora dessa pasta (veja [*Músicas Processadas e Janelas de Seleção*](#músicas-processadas-e-janelas-de-seleção) abaixo).
+- Um seletor de **Modo de Varredura** (**Somente rápido**, **Somente longo**, **Ambos**) que decide quais modos são executados na sessão atual, substituindo a antiga caixa "gerar tempos diferentes", com uma opção de varredura completa em um único clique (veja [*Executando uma Varredura: Modo Rápido vs. Longo*](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo) abaixo).
+- Uma janela **Selecionar músicas...**: uma árvore da sua pasta de entrada com uma caixa Rápido/Longo por música, permitindo planejar exatamente quais músicas são candidatas para cada modo.
+- Uma janela **Selecionar pastas PKLZ...**: uma árvore das subpastas do seu banco de dados Audfprint, permitindo restringir uma varredura a coleções específicas de fingerprints em vez de sempre buscar em todo o banco de dados. Usar mais de uma subpasta faz com que o Modo Longo regenere suas variações uma vez por subpasta, o que o console avisa.
+- Uma escolha **Copiar / Mover** dentro das janelas **Adicionar arquivos PKLZ...** e **Adicionar arquivos de áudio...**. Mover (o padrão) exclui os arquivos de origem após uma cópia bem-sucedida; Copiar os deixa onde estão.
 - Suporte para **vários idiomas** e **traduções.** Atualmente, os idiomas suportados são português, inglês, italiano e francês (veja [*Adicionando um Idioma / Traduções*](#adicionando-um-idioma--tradu%C3%A7%C3%B5es) abaixo).
 - Suporte para modos **claro** e **escuro**.
 
@@ -322,7 +326,7 @@ Se você preferir contornar totalmente o instalador sinalizado e já tiver uma i
 
 ## Usando o WerZatSonGUI
 
-Assim que a configuração estiver concluída, o WerZatSonGUI abre sua interface completa toda vez que você o inicia. Tanto no modo janela quanto maximizado/tela cheia, a barra de ação superior (**Adicionar arquivos PKLZ...**, **Adicionar arquivos de áudio...**, **Arquivos processados...**, **Parar à força**, **Iniciar o WerZatSong**) permanece sempre visível e acessível. Se o resto da interface não couber no espaço disponível (por exemplo, com **Chaves de API e Webhook** e **Diretórios** expandidos em uma tela menor), a seção acima da barra de ação rola em vez de empurrá-la para fora da tela.
+Assim que a configuração estiver concluída, o WerZatSonGUI abre sua interface completa toda vez que você o inicia. Tanto no modo janela quanto maximizado/tela cheia, a barra de ação superior (**Adicionar arquivos PKLZ...**, **Adicionar arquivos de áudio...**, **Abrir pasta de arquivos processados...**, **Parar à força**, **Iniciar o WerZatSong**) permanece sempre visível e acessível. Se o resto da interface não couber no espaço disponível (por exemplo, com **Chaves de API e Webhook** e **Diretórios** expandidos em uma tela menor), a seção acima da barra de ação rola em vez de empurrá-la para fora da tela.
 
 ### Cabeçalho
 
@@ -355,22 +359,25 @@ Quatro caixas de seleção para ativar ou desativar **MusicBrainz (AcoustID)**, 
 
 ### Configurações Avançadas
 
-Dividido em cinco abas para agrupar configurações relacionadas. Cada configuração individual tem um pequeno botão **[?]** à esquerda com uma breve explicação, e esta seção também resume o que cada uma faz. Todo este painel fica acinzentado enquanto uma varredura está em execução.
+Dividido em oito abas para agrupar configurações relacionadas. Cada configuração individual tem um pequeno botão **[?]** à esquerda com uma breve explicação, e esta seção também resume o que cada uma faz. Todo este painel fica acinzentado enquanto uma varredura está em execução.
 
 #### Aba Geral
 
-- **Marcar todos os arquivos de áudio como processados em:** Útil se você tem muitos arquivos na pasta de entrada e deseja executar apenas alguns específicos. Marca todos os arquivos de áudio da pasta de entrada como **processados** no modo **Rápido** (sem geração adicional de tempo), no modo **Longo** (arquivos originais e tempos adicionais) ou em **ambos** os modos, para que você possa excluir manualmente as linhas das músicas que não deseja executar editando o **PROCESSED.txt.** Pressionar qualquer um dos 3 botões **sobrescreve** seu arquivo PROCESSED.txt atual (veja [*Arquivos Processados & PROCESSED.txt*](#arquivos-processados--processedtxt) abaixo).
+- **Modo de Varredura:** um seletor de três opções, **Somente rápido**, **Somente longo** ou **Ambos**, que decide quais modos de busca realmente são executados na sessão atual. Veja [*Executando uma Varredura: Modo Rápido vs. Longo*](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo) abaixo para o que cada opção faz.
+- **Selecionar músicas...** e **Selecionar pastas PKLZ...:** ficam lado a lado acima da linha Modo de Varredura, compartilhando um único botão **[?]** à esquerda. Clicar nele abre um pequeno seletor que permite escolher qual das duas explicações ler. **Selecionar músicas...** abre uma janela listando cada música no seu Diretório de Entrada com uma caixa Rápido/Longo cada, substituindo a antiga função "Marcar todos os arquivos de áudio como processados em". **Selecionar pastas PKLZ...** abre uma janela listando as subpastas do seu Diretório do Banco de Dados do Audfprint, permitindo restringir buscas do Audfprint a subpastas específicas em vez de sempre buscar em todo o banco de dados (sua explicação cobre as vantagens e desvantagens de escolher mais de uma subpasta). Veja [*Músicas Processadas e Janelas de Seleção*](#músicas-processadas-e-janelas-de-seleção) abaixo para ambas.
 - **Tema:** Altera a aparência visual do aplicativo. Defina como **Claro**, **Escuro** ou **Padrão do sistema** para corresponder automaticamente às configurações do seu sistema operacional.
 - **Idioma:** Alterna a interface entre **Português** e outro idioma suportado. Tem efeito imediato, sem necessidade de reiniciar (veja [*Adicionando um Idioma / Traduções*](#adicionando-um-idioma--tradu%C3%A7%C3%B5es) abaixo se quiser ajudar a adicionar mais).
 
 #### Aba Modo Longo
 
-- **Ativar Modo Longo (gerar velocidades/tempos diferentes para cada arquivo de áudio):** alterna as varreduras entre o modo **Rápido** e **Longo**. Veja [*Executando uma Varredura: Modo Rápido vs. Longo*](#executando-uma-varredura-modo-r%C3%A1pido-vs-longo) abaixo.
+Se o Modo Longo é executado ou não nesta sessão agora é decidido pelo seletor **Modo de Varredura** na **aba Geral** acima, não por uma caixa nesta aba.
+
 - **Multiplicadores de tempo negativos** / **Multiplicadores de tempo positivos:** as proporções de tempo usadas para gerar variações no modo Longo (negativo = desacelerado/afinação mais grave, abaixo de `1.0`; positivo = acelerado/afinação mais aguda, acima de `1.0`). Edite-os como uma lista separada por vírgulas entre colchetes, por exemplo, `[0.9, 0.95, 1.05, 1.1]`. Deixar **um** campo vazio (ou `[]`) faz o WerZatSonGUI gerar variações apenas do outro arranjo; deixar **ambos** vazios restaura o conjunto padrão completo de 40 variações (20 negativas + 20 positivas).
 
 #### Aba Audfprint
 
-- **Usar apenas fingerprints deste subdiretório:** restringe o modo Audfprint a uma única subpasta do seu Diretório do Banco de Dados do Audfprint em vez de pesquisar todas. Use **Procurar...** para escolher uma ou digite o nome diretamente (ela já deve existir dentro do Diretório do Banco de Dados do Audfprint).
+Escolher subpastas PKLZ específicas agora é feito através do botão **Selecionar pastas PKLZ...** na **aba Geral**, não nesta aba; o popup **[?]** ao lado explica as vantagens e desvantagens de escolher mais de uma subpasta.
+
 - **Definir o número de threads da CPU a serem usados:** define quantos threads da CPU o modo Audfprint usa. O próprio WerZatSong limita isso a **16**, independentemente do valor inserido, para evitar falta de memória; deixar desmarcado permite usar automaticamente todos os threads disponíveis na sua máquina.
 - **Defina a profundidade de pesquisa como:** controla o quão agressivamente o Audfprint procura por uma correspondência, de `1` a `8`. Valores mais altos realizam uma "busca profunda" mais minuciosa para clipes de baixa qualidade, mas podem aumentar significativamente o tempo de processamento. O padrão é `4`.
 
@@ -384,12 +391,20 @@ Dividido em cinco abas para agrupar configurações relacionadas. Cada configura
 - **Use um nome personalizado para o Webhook:** substitui o nome de exibição que seu webhook do Discord usa ao postar, em vez do padrão "WerZatSong".
 - **Use uma imagem personalizada para o Webhook:** substitui a imagem de avatar que seu webhook do Discord usa ao postar. O link deve começar com `https://cdn.discordapp.com/icons/`, `https://cdn.discordapp.com/app-icons/` ou `https://cdn.discordapp.com/avatars/`, caso contrário o Discord não o reconhecerá. A imagem deve estar no formato `.webp`. Você pode obter um link formatado corretamente definindo a imagem como foto de perfil de um bot do Discord e copiando o link de lá (se necessário, removendo qualquer parâmetro de tamanho no final e alterando a extensão para `.webp`).
 
+#### Aba .env
+
+- **Comando Python:** Escolha se o WerZatSong deve ser iniciado usando o comando simples **python** ou o caminho completo para o executável do Python. Use o caminho completo se você tiver várias instalações do Python ou se o Python não estiver no PATH do seu sistema.
+- **Comando FFmpeg:** Escolha se deseja usar o comando simples **ffmpeg** ou o caminho completo para o executável do FFmpeg. Use o caminho completo se o FFmpeg não estiver no PATH do seu sistema ou se você precisar forçar uma versão específica.
+- **Comando Node:** Escolha se deseja usar o comando simples **node** ou o caminho completo para o executável do Node.js. Use o caminho completo se o Node não estiver no PATH do seu sistema ou se você precisar forçar uma versão específica.
+
 ### Adicionando Arquivos para Varredura
 
 Use **Adicionar arquivos de áudio...** na parte inferior da janela para adicionar as músicas que deseja buscar, escolhendo arquivos individuais ou uma pasta inteira. O WerZatSonGUI aceita arquivos `.mp3`, `.wav`, `.flac` e `.m4a`. Qualquer arquivo que não seja `.mp3` é **automaticamente convertido** para MP3 VBR de mais alta qualidade que o FFmpeg pode produzir no momento em que a varredura começa.
 
 > **AVISO: Esta conversão SUBSTITUI o arquivo original.** 
 > Uma vez que um `.wav`/`.flac`/`.m4a` é convertido, apenas o `.mp3` resultante permanece em sua pasta de entrada. Mantenha uma cópia em outro lugar antes se quiser preservar o arquivo original com codificação sem perdas (ou codificado de forma diferente). A conversão é segura contra travamentos (uma execução interrompida nunca deixa um arquivo parcialmente convertido ou ausente; ela simplesmente tenta novamente de forma limpa na próxima vez), mas é unidirecional.
+
+Tanto a janela **Adicionar arquivos PKLZ...** quanto a **Adicionar arquivos de áudio...** têm uma escolha **Mover / Copiar** na parte inferior. **Mover** (o padrão) copia os arquivos/pastas selecionados para o destino e, em seguida, exclui os originais após a cópia ser bem-sucedida. **Copiar** deixa os originais exatamente onde estavam. A escolha é salva no momento em que você clica nela, então sobrevive a um **Cancelar**, e é lembrada separadamente para a janela Adicionar PKLZ e para a janela Adicionar Áudio. Se a origem que você escolheu acabar sendo a própria pasta de destino, ou estiver dentro dela, ou contê-la, a cópia ainda acontece, mas a exclusão é seguramente ignorada, então uma seleção equivocada nunca pode excluir seus dados.
 
 ## Modos de Busca Explicados
 
@@ -400,19 +415,37 @@ Use **Adicionar arquivos de áudio...** na parte inferior da janela para adicion
 
 ## Executando uma Varredura: Modo Rápido vs. Longo
 
+Qual desses modos é executado em uma dada sessão é escolhido com o seletor **Modo de Varredura** na **aba Geral** (**Somente rápido**, **Somente longo**, ou **Ambos**, veja acima):
+
 - **Modo Rápido** (o padrão) pesquisa cada arquivo pendente exatamente como está, sem gerar variações.
-- **Modo Longo** gera primeiro variações de tempo/afinação de cada arquivo (veja a **aba Modo Longo** acima) e depois pesquisa também cada variação. Muito mais minucioso, porém muito mais lento, pois efetivamente varre dezenas de arquivos extras por música.
+- **Modo Longo** gera primeiro variações de tempo/afinação de cada arquivo (veja a **aba Modo Longo** acima) e depois pesquisa também cada variação. Muito mais minucioso, porém muito mais lento, pois efetivamente varre dezenas de arquivos extras por música. Para uma música que ainda não teve uma passagem pelo Modo Rápido, seu arquivo original também é incluído no lote do Modo Longo, então uma sessão **Somente longo** ainda assim varre tudo, mesmo sem nunca executar o ciclo Rápido.
+- **Ambos** executa o Modo Rápido até a conclusão primeiro, depois o Modo Longo, para uma varredura completa em um único clique ao custo do maior tempo total de execução.
 
 De qualquer forma, o WerZatSonGUI nunca entrega a lista inteira de arquivos ao mecanismo subjacente de uma só vez: o próprio WerZatSong tem um **limite rígido de 30 arquivos por pesquisa**, então tudo é dividido em lotes de antemão. Os lotes normalmente têm esse mesmo número, **30 arquivos** (ou, no Modo Longo, 30 variações) por vez.
 
 No Modo Rápido, isso é direto: 45 arquivos pendentes viram uma divisão 30/15.
 No Modo Longo, é um pouco mais inteligente, porque o *número de variações por arquivo* não é fixo e raramente divide exatamente por 30: em vez de despachar um lote de 30 seguido por um lote minúsculo de, digamos, 3 variações restantes, o WerZatSonGUI mantém um pool contínuo de variações ainda não pesquisadas entre arquivos e só finaliza o tamanho de um lote quando sabe quanto realmente resta para pesquisar. Concretamente: se o arquivo A produz 33 variações, as primeiras 30 são despachadas assim que ficam prontas, e as 3 restantes são mantidas e combinadas com as primeiras 27 variações geradas para o arquivo B em um segundo lote completo de 30. E assim por diante para quantos arquivos forem necessários, em vez de enviar um lote quase vazio desperdiçado. O limite rígido de 30 arquivos ainda é tecnicamente respeitado internamente pela lógica do programa, mas você não precisa mais se preocupar com isso.
 
-## Arquivos Processados & PROCESSED.txt
+Se você selecionar mais de uma subpasta PKLZ na janela **Selecionar pastas PKLZ...**, o Modo Longo precisa regenerar do zero cada variação de tempo/afinação para **cada** subpasta por vez (as variações nunca são mantidas em disco entre subpastas, para manter o uso de disco limitado), então uma varredura em três subpastas faz o triplo do trabalho de ffmpeg de uma varredura em apenas uma. O console imprime uma linha `[AVISO]` antes da execução começar sempre que isso está prestes a acontecer.
 
-Cada arquivo que o WerZatSonGUI termina de pesquisar (no Modo Rápido, no Modo Longo ou em ambos, dependendo de qual(is) modo(s) ele executou) é registrado como uma linha no `PROCESSED.txt`, na raiz da pasta do WerZatSonGUI, para que executar novamente uma varredura mais tarde nunca pesquise o mesmo arquivo duas vezes no mesmo modo. Cada linha é o caminho relativo do arquivo dentro do seu Diretório de Entrada, opcionalmente com o sufixo `|quick` ou `|long` se ele foi processado apenas em um modo específico em vez de ambos.
+MusicBrainz, AudioTag e Shazam não estão vinculados a uma subpasta PKLZ específica, então cada um é executado apenas uma vez por modo de varredura que realmente for executado nesta sessão, contra a primeira subpasta PKLZ que concluir com sucesso algum trabalho. Se uma subpasta travar no meio do caminho (falta de memória, um `.pklz` corrompido, etc.) para algumas de suas músicas, essas músicas específicas recebem sua cobertura de MusicBrainz/AudioTag/Shazam em uma execução posterior, e o console imprime uma linha `[AVISO]` observando quantas músicas foram afetadas.
 
-Você pode editar livremente esse arquivo à mão: exclua uma linha (ou o arquivo inteiro) para fazer o WerZatSonGUI pesquisá-lo novamente na próxima vez, ou use **Marcar todos os arquivos de áudio como processados em** (veja a **aba Geral** acima) para marcar tudo em massa e depois excluir apenas as poucas linhas dos arquivos que você realmente deseja (re)pesquisar. Muito mais rápido do que excluir centenas de linhas individuais pelo caminho inverso.
+Um lote só conta como concluído quando `werzatsong.js` sai com o código `0`. Se sair com qualquer outro código, toda música naquele lote é retentada na próxima subpasta PKLZ, e na próxima varredura por completo se nenhuma subpasta obtiver sucesso para ela. Essa é uma mudança em relação ao comportamento anterior a esta revisão, que costumava marcar um lote como processado mesmo quando a varredura subjacente havia travado, ignorando essas músicas silenciosamente para sempre.
+
+## Músicas Processadas e Janelas de Seleção
+
+O WerZatSonGUI mantém o controle de quais músicas já foram varridas usando dois arquivos JSON dentro de `assets\listsProcessed`: `processed-songs-mode-quick.json` e `processed-songs-mode-long.json`, um por modo de varredura. Uma música está listada no arquivo de um modo se já foi varrida naquele modo, ou se você a excluiu deliberadamente; qualquer música **não** listada ali está pendente para aquele modo. Isso substitui o antigo `PROCESSED.txt` único de versões anteriores.
+
+![Janela de seleção de músicas](../assets/images/song_selection_dialog.png)
+![Janela de seleção de pastas PKLZ](../assets/images/pklz_selection_dialog.png)
+
+Para mudar quais músicas estão pendentes, abra **Selecionar músicas...** (veja a **aba Geral** acima): ela mostra cada música do seu Diretório de Entrada como uma árvore, com uma caixa **Rápido** e uma **Longo** em cada linha. Clicar na caixa de uma pasta alterna todas as músicas dentro dela de uma vez. Esta janela é onde agora vive o antigo fluxo de trabalho "Marcar todos os arquivos de áudio como processados em", sem precisar depois editar um arquivo de texto manualmente.
+
+Cada arquivo JSON também armazena o diretório de entrada para o qual foi escrito. Se você mudar depois sua configuração de **Diretório de Entrada**, o arquivo correspondente é ignorado na leitura e deixado intacto na escrita, então sua lista sobrevive caso você mova a pasta de entrada de volta. A primeira varredura após tal mudança mostra um aviso oferecendo redefinir o arquivo para corresponder ao seu Diretório de Entrada atual (mantendo as entradas já processadas, apenas atualizando o caminho salvo).
+
+Se você quiser buscar novamente uma música específica, abra **Selecionar músicas...**, encontre-a, marque a caixa do modo que deseja executar novamente, clique em **Salvar**, então inicie uma nova varredura.
+
+Na primeiríssima vez que você iniciar esta versão, qualquer `PROCESSED.txt` existente é automaticamente migrado para os dois arquivos JSON acima, e o original é mantido como `PROCESSED.txt.migrated.bak` na pasta do aplicativo, como referência.
 
 ## Onde Encontrar os Resultados
 
@@ -449,6 +482,6 @@ O WerZatSonGUI atualmente é distribuído com **Português**, **Inglês**, **Ita
 
 ## Créditos
 
-- **WerZatSonGUI v1.4.0** por some random account, com contribuições de EierkuchenHD. Testadores: EierkuchenHD, Shardanik, VoidGod. Tradução para o português brasileiro: (W.I.P.).
+- **WerZatSonGUI v2.0.0** por some random account, com contribuições de EierkuchenHD e VoidGod. Testadores: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_. Tradução para o português brasileiro: (W.I.P.).
 - **Script em lote do WerZatSong** por some random account, com lógica de geração de arquivos baseada em velocidade/tempo criada por Mystic65.
 - **WerZatSong** por Nel, com contribuições de Numerophobe, AzureBlast e Mystic65.
