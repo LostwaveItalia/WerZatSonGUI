@@ -944,6 +944,222 @@ def apply_theme_to_gui(root, theme_mode="System"):
         print(f"[WARNING]: Could not apply custom title bar styles: {e}")
 
 
+def format_size(num_bytes):
+    """1234567 -> '1.2 MB'. Used for the PKLZ selection dialog's Size column and summary."""
+    size = float(num_bytes or 0)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+
+# ------------------------------------------------------------------
+# PKLZ staging (database/___TEMP)
+#
+# Audfprint can only be pointed at a folder, so restricting a search to an arbitrary
+# selection of .pklz files means physically gathering them in one place. The selected
+# files are MOVED (never copied: databases run to hundreds of gigabytes) into a ___TEMP
+# subfolder of the database that mirrors the database's own folder structure, and the
+# scan is pointed at ___TEMP. "Use full database" moves everything back out again and
+# the scan is pointed at the database root, so ___TEMP is empty whenever it is not the
+# target. This is the same ___TEMP name the input folder already uses for staging songs.
+#
+# Every move is an os.replace() within one volume (___TEMP lives inside the database),
+# so it is atomic per file and a crash mid-way can only ever leave a file in one of its
+# two possible places, never lost or half-written. reconcile_pklz_staging() is
+# idempotent and is re-run at the start of every scan, so an interrupted move is simply
+# finished the next time round.
+# ------------------------------------------------------------------
+
+def pklz_staging_dir(db_dir):
+    return os.path.join(db_dir, TEMP_STAGING_DIRNAME)
+
+
+def scan_pklz_database(db_dir):
+    """Every .pklz under db_dir, as {relative_path: size_bytes}, plus the set of relative
+    paths currently sitting in ___TEMP rather than at their home location.
+
+    Both locations are walked and merged by relative path, so a file the previous
+    selection already staged still shows up under the folder it belongs to: the dialog
+    and the reconcile both see one logical database regardless of where each file
+    physically is right now. os.scandir is used rather than os.walk because DirEntry
+    sizes come from the directory listing itself on Windows, which matters at 30,000
+    files."""
+    files = {}
+    staged = set()
+
+    def walk(base, is_staging):
+        stack = [base]
+        while stack:
+            current = stack.pop()
+            try:
+                with os.scandir(current) as it:
+                    for entry in it:
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                # Only the top-level ___TEMP is the staging tree; a user
+                                # folder that happens to share the name deeper down is data.
+                                if not is_staging and current == base and entry.name == TEMP_STAGING_DIRNAME:
+                                    continue
+                                stack.append(entry.path)
+                            elif entry.is_file(follow_symlinks=False) and entry.name.lower().endswith(".pklz"):
+                                rel = os.path.relpath(entry.path, base)
+                                try:
+                                    size = entry.stat(follow_symlinks=False).st_size
+                                except OSError:
+                                    size = 0
+                                files[rel] = size
+                                if is_staging:
+                                    staged.add(rel)
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+
+    walk(db_dir, False)
+    staging = pklz_staging_dir(db_dir)
+    if os.path.isdir(staging):
+        walk(staging, True)
+    return files, staged
+
+
+def selected_pklz_set(files, folders_sel, files_sel):
+    """Resolves a selection (folder relative paths + file relative paths) to the concrete
+    set of .pklz relative paths it covers, against a scan_pklz_database() index. A folder
+    covers every file beneath it, wherever that file physically is at the moment."""
+    prefixes = [os.path.normcase(f.rstrip("\\/")) + os.sep for f in folders_sel if f]
+    wanted_files = {os.path.normcase(f) for f in files_sel}
+    wanted = set()
+    for rel in files:
+        norm = os.path.normcase(rel)
+        if norm in wanted_files or any(norm.startswith(p) for p in prefixes):
+            wanted.add(rel)
+    return wanted
+
+
+def prune_empty_dirs(root):
+    """Removes empty directories under root, bottom-up, then root itself if it is empty.
+    Never raises: a directory that will not go is left alone."""
+    if not os.path.isdir(root):
+        return
+    for current, dirs, files in os.walk(root, topdown=False):
+        if not dirs and not files or not os.listdir(current):
+            try:
+                os.rmdir(current)
+            except OSError:
+                pass
+
+
+def reconcile_pklz_staging(db_dir, use_full, folders_sel, files_sel, on_plan=None, progress=None):
+    """Makes database/___TEMP hold exactly the current selection and nothing else.
+
+    Computes what should be staged from the selection, compares it with what is staged,
+    and moves only the difference: files newly selected go in, files no longer selected
+    come out. Nothing is ever overwritten; a file already present at its destination is
+    reported and left where it is. With use_full every staged file goes home.
+
+    on_plan(to_temp_count, to_db_count) is called once before any move, so a caller can
+    announce what is about to happen. progress(done, total) is called after each move.
+
+    Returns a dict: moved_in, moved_out, problems (list of (kind, rel, detail) with kind
+    "conflict" or "error"), and staged_after (how many .pklz files ___TEMP holds now)."""
+    files, staged = scan_pklz_database(db_dir)
+    wanted = set() if use_full else selected_pklz_set(files, folders_sel, files_sel)
+    staging = pklz_staging_dir(db_dir)
+    to_temp = sorted(wanted - staged)
+    to_db = sorted(staged - wanted)
+    if on_plan:
+        on_plan(len(to_temp), len(to_db))
+
+    total = len(to_temp) + len(to_db)
+    done = 0
+    result = {"moved_in": 0, "moved_out": 0, "problems": [], "staged_after": 0}
+    now_staged = set(staged)
+
+    def move(src, dst, rel):
+        if os.path.exists(dst):
+            result["problems"].append(("conflict", rel, dst))
+            return False
+        try:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            os.replace(src, dst)
+            return True
+        except OSError as e:
+            result["problems"].append(("error", rel, str(e)))
+            return False
+
+    for rel in to_temp:
+        if move(os.path.join(db_dir, rel), os.path.join(staging, rel), rel):
+            result["moved_in"] += 1
+            now_staged.add(rel)
+        done += 1
+        if progress:
+            progress(done, total)
+    for rel in to_db:
+        if move(os.path.join(staging, rel), os.path.join(db_dir, rel), rel):
+            result["moved_out"] += 1
+            now_staged.discard(rel)
+        done += 1
+        if progress:
+            progress(done, total)
+
+    # Folders emptied by moving files home are dead weight, and ___TEMP itself should not
+    # exist at all when nothing is staged: a full-database scan walks the whole database
+    # and an empty leftover tree is just noise in it.
+    prune_empty_dirs(staging)
+    result["staged_after"] = len(now_staged)
+    return result
+
+
+class _Tooltip:
+    """Minimal hover tooltip: text_fn is called at show time so the text can be dynamic."""
+
+    def __init__(self, widget, text_fn, delay_ms=450):
+        self.widget = widget
+        self.text_fn = text_fn
+        self.delay_ms = delay_ms
+        self._after_id = None
+        self._tip = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        self._after_id = self.widget.after(self.delay_ms, self._show)
+
+    def _cancel(self):
+        if self._after_id is not None:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _show(self):
+        self._after_id = None
+        text = self.text_fn() if callable(self.text_fn) else self.text_fn
+        if not text or self._tip is not None:
+            return
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        self._tip = tk.Toplevel(self.widget)
+        self._tip.wm_overrideredirect(True)
+        self._tip.wm_geometry(f"+{x}+{y}")
+        ttk.Label(self._tip, text=text, justify="left", padding=(8, 5),
+                  relief="solid", borderwidth=1).pack()
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
+
 def force_clean_directory(dir_path, recreate=False):
     """Safely cleans a directory without throwing errors, and optionally recreates it."""
     for _ in range(15):
@@ -1207,6 +1423,9 @@ class WerZatSongGUI(tk.Tk):
             show_btn.config(text=self._tr("show_btn"))
             if key in self.env_hide_buttons:
                 self.env_hide_buttons[key].config(text=self._tr("hide_btn"))
+        # The PKLZ selection summary is built from counts at display time rather than being a
+        # fixed string, so it is not in _text_widgets and has to be re-rendered by hand.
+        self._refresh_pklz_summary_label()
         # Update window title
         if hasattr(self, '_is_first_time_setup') and self._is_first_time_setup:
             self.title(self._tr("first_time_setup_title"))
@@ -1770,6 +1989,15 @@ class WerZatSongGUI(tk.Tk):
                               "select_songs_btn").pack(side="left", padx=(0, 6))
         self._add_text_widget(ttk.Button(selection_frame, command=self._open_pklz_selection_menu),
                               "select_pklz_folders_btn").pack(side="left")
+        # What is currently selected, right where the selecting happens: without it the only
+        # way to know was to reopen the dialog and wait for the database to be walked.
+        # Filled from the summary saved alongside the selection, so it costs no disk access.
+        self.pklz_summary_label = ttk.Label(selection_frame, foreground="#888888")
+        self.pklz_summary_label.pack(side="left", padx=(8, 0))
+        self._pklz_summary_names = []
+        self._pklz_summary_names_total = 0
+        _Tooltip(self.pklz_summary_label, self._pklz_summary_tooltip)
+        self._refresh_pklz_summary_label()
 
         # Scan Mode: the reworked replacement for the old boolean generate_different_tempos
         # checkbox, now a three-way choice deciding which search modes actually run this
@@ -2567,22 +2795,29 @@ class WerZatSongGUI(tk.Tk):
         return atomic_write_json(path, data)
 
     def _load_pklz_selection(self):
-        """Returns (use_full_database, folders, db_dir_mismatch_bool). Missing/malformed JSON
-        falls back to "use the full database". A mismatched database_dir (the folder moved, or
-        db_dir was reconfigured) does not block anything: the stored folder names are still
-        tried relative to the *current* db_dir, since PKLZ subfolder names are typically still
+        """Returns (use_full_database, folders, files, db_dir_mismatch_bool). Missing/malformed
+        JSON falls back to "use the full database". A mismatched database_dir (the folder
+        moved, or db_dir was reconfigured) does not block anything: the stored names are
+        still tried relative to the *current* db_dir, since PKLZ paths are typically still
         valid after such a move, and there is no data-loss risk either way, so unlike the
-        processed-songs mismatch there is no reset prompt here, just a log warning."""
-        default = {"version": 1, "database_dir": "", "use_full_database": True, "folders": []}
+        processed-songs mismatch there is no reset prompt here, just a log warning.
+
+        Version 1 of the file only had "folders"; "files" (individual .pklz selections) was
+        added in version 2 and simply reads as empty from an older file."""
+        default = {"version": 2, "database_dir": "", "use_full_database": True,
+                   "folders": [], "files": []}
         data = load_json_file(PKLZ_FOLDERS_FILE, None)
         if not isinstance(data, dict):
             if data is None and os.path.exists(PKLZ_FOLDERS_FILE):
                 self._log(self._tr("invalid_pklz_json", file=PKLZ_FOLDERS_FILE))
             data = default
+
+        def string_list(value):
+            return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
         use_full = bool(data.get("use_full_database", True))
-        folders = data.get("folders")
-        if not isinstance(folders, list) or not all(isinstance(f, str) for f in folders):
-            folders = []
+        folders = string_list(data.get("folders"))
+        files = string_list(data.get("files"))
         stored_db_dir = data.get("database_dir") or ""
         current_db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
         mismatch = bool(stored_db_dir) and (os.path.normcase(os.path.normpath(stored_db_dir))
@@ -2590,13 +2825,44 @@ class WerZatSongGUI(tk.Tk):
         if mismatch:
             self._log(self._tr("log_db_dir_mismatch", file=PKLZ_FOLDERS_FILE,
                                 old_dir=stored_db_dir, new_dir=current_db_dir))
-        return use_full, folders, mismatch
+        return use_full, folders, files, mismatch
 
-    def _save_pklz_selection(self, use_full, folders):
+    def _save_pklz_selection(self, use_full, folders, files=(), summary=None):
+        """summary is a small dict the General tab shows next to the button (counts, total
+        size, first few names) so that displaying the current selection at startup never
+        needs the database walked."""
         current_db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
-        data = {"version": 1, "database_dir": current_db_dir,
-                "use_full_database": bool(use_full), "folders": list(folders)}
+        data = {"version": 2, "database_dir": current_db_dir,
+                "use_full_database": bool(use_full), "folders": list(folders), "files": list(files)}
+        if summary:
+            data["summary"] = summary
         return atomic_write_json(PKLZ_FOLDERS_FILE, data)
+
+    def _apply_pklz_staging(self, db_dir, use_full, folders, files, progress=None):
+        """reconcile_pklz_staging() with the console kept informed. Returns how many .pklz
+        files sit in ___TEMP afterwards, which is what a staged scan will actually search
+        (0 with use_full). Safe to call from a worker thread: _log is queue-based."""
+        if not os.path.isdir(db_dir):
+            return 0
+
+        def on_plan(to_temp, to_db):
+            if use_full:
+                if to_db:
+                    self._log(self._tr("log_pklz_restore_all", count=to_db))
+            elif to_temp or to_db:
+                self._log(self._tr("log_pklz_staging_start", to_temp=to_temp, to_db=to_db))
+
+        result = reconcile_pklz_staging(db_dir, use_full, folders, files,
+                                        on_plan=on_plan, progress=progress)
+        for kind, rel, detail in result["problems"]:
+            if kind == "conflict":
+                self._log(self._tr("log_pklz_staging_conflict", file=rel))
+            else:
+                self._log(self._tr("log_pklz_staging_error", file=rel, error=detail))
+        if result["moved_in"] or result["moved_out"] or result["problems"]:
+            self._log(self._tr("log_pklz_staging_done", to_temp=result["moved_in"],
+                                to_db=result["moved_out"], errors=len(result["problems"])))
+        return result["staged_after"]
 
     def _migrate_legacy_processed_file(self):
         """One-time migration from the old single PROCESSED.txt (bare "path", "path|quick", or
@@ -3048,135 +3314,253 @@ class WerZatSongGUI(tk.Tk):
         self._save_processed_songs("long", all_files - long_checked)
 
     def _open_pklz_selection_menu(self):
-        """Opens the PKLZ Folder Selection dialog: a tree of subfolders inside
-        db_dir, each with a single checkbox, letting the user restrict Audfprint searches to
-        specific fingerprint collections instead of always searching the whole database.
-        Saves PKLZ_FOLDERS_FILE via _save_pklz_selection."""
+        """Opens the PKLZ Selection dialog: a lazily-expanded tree of the Audfprint database
+        with a checkbox on every folder AND every individual .pklz file, letting a scan be
+        restricted to any subset instead of always searching the whole database.
+
+        Saving writes PKLZ_FOLDERS_FILE and then physically stages the selection into
+        database/___TEMP (see reconcile_pklz_staging): Audfprint can only be aimed at a
+        folder, so an arbitrary selection has to be gathered into one. The moves happen on
+        Save rather than on each click because ticking a single folder here can mean tens of
+        thousands of files (this database's largest holds 12,414), and doing that work per
+        keystroke would freeze the dialog and leave half-moved state behind whenever someone
+        changed their mind. The scan re-applies the same reconcile before it runs, so the
+        staging folder always ends up agreeing with what was saved.
+
+        Everything is built around the database being large: 30,000+ files is far more than a
+        Treeview will accept at once, so folders start collapsed and their children are only
+        inserted the first time they are opened."""
         db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
         if not os.path.exists(db_dir):
             messagebox.showerror(self._tr("error_title"), self._tr("pklz_folder_missing", dir=db_dir))
             return
 
-        # Bottom-up: a folder qualifies (is offered in the tree) if it directly contains a
-        # .pklz file, or any of its descendants do. A folder with none would just be a dead
-        # selection Audfprint could never find anything in.
-        has_pklz = set()
-        for root, dirs, files in os.walk(db_dir, topdown=False):
-            contains = any(f.lower().endswith(".pklz") for f in files)
-            if not contains:
-                contains = any(os.path.relpath(os.path.join(root, d), db_dir) in has_pklz for d in dirs)
-            if contains and root != db_dir:
-                has_pklz.add(os.path.relpath(root, db_dir))
-
-        if not has_pklz:
+        files_index, _staged_now = scan_pklz_database(db_dir)
+        if not files_index:
             messagebox.showinfo(self._tr("info_title"), self._tr("no_pklz_folders_found", dir=db_dir))
             return
 
-        use_full, saved_folders, _db_mismatch = self._load_pklz_selection()
-        selected = {f for f in saved_folders if f in has_pklz}
-
         class _PklzNode:
-            __slots__ = ("name", "rel", "children", "parent")
+            __slots__ = ("name", "rel", "children", "parent", "is_file", "size", "count")
 
-            def __init__(self, name, rel, parent=None):
+            def __init__(self, name, rel, parent=None, is_file=False, size=0):
                 self.name = name
                 self.rel = rel
                 self.children = {}
                 self.parent = parent
+                self.is_file = is_file
+                self.size = size          # own size for a file, aggregate for a folder
+                self.count = 1 if is_file else 0   # .pklz files at or under this node
 
         proot = _PklzNode("", "")
-        for rel in sorted(has_pklz):
+        all_nodes = []
+        for rel, size in files_index.items():
             parts = rel.split(os.sep)
             node = proot
             accum = ""
-            for part in parts:
+            for part in parts[:-1]:
                 accum = part if not accum else os.path.join(accum, part)
-                if part not in node.children:
-                    node.children[part] = _PklzNode(part, accum, node)
-                node = node.children[part]
+                child = node.children.get(part)
+                if child is None:
+                    child = _PklzNode(part, accum, node)
+                    node.children[part] = child
+                    all_nodes.append(child)
+                node = child
+            leaf = _PklzNode(parts[-1], rel, node, is_file=True, size=size)
+            node.children[parts[-1]] = leaf
+            all_nodes.append(leaf)
+            # Roll the file's size and its own count up through every ancestor, so a folder
+            # row can state what selecting it actually costs without walking the disk again.
+            walker = node
+            while walker is not None and walker is not proot:
+                walker.size += size
+                walker.count += 1
+                walker = walker.parent
+
+        use_full, saved_folders, saved_files, _db_mismatch = self._load_pklz_selection()
+        known_folders = {n.rel for n in all_nodes if not n.is_file}
+        selected_folders = {f for f in saved_folders if f in known_folders}
+        selected_files = {f for f in saved_files if f in files_index}
 
         top = tk.Toplevel(self)
         top.title(self._tr("pklz_folder_selection_title"))
         top.transient(self)
-        top.geometry("480x480")
-        top.minsize(360, 320)
+        top.geometry("760x600")
+        top.minsize(560, 420)
 
         var_use_full = tk.BooleanVar(value=use_full)
-        ttk.Checkbutton(top, variable=var_use_full, text=self._tr("use_full_database_check"),
-                        command=lambda: refresh_enabled()).pack(anchor="w", padx=10, pady=(10, 4))
+        var_search = tk.StringVar()
 
-        tree_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
+        header = ttk.Frame(top, padding=(10, 10, 10, 0))
+        header.pack(fill="x")
+        ttk.Checkbutton(header, variable=var_use_full, text=self._tr("use_full_database_check"),
+                        command=lambda: refresh_enabled()).pack(anchor="w")
+
+        search_row = ttk.Frame(top, padding=(10, 6, 10, 0))
+        search_row.pack(fill="x")
+        self._add_text_widget(ttk.Label(search_row, text=""), "pklz_search_label").pack(side="left")
+        search_entry = ttk.Entry(search_row, textvariable=var_search)
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        self._add_text_widget(ttk.Button(search_row, command=lambda: var_search.set("")),
+                              "pklz_search_clear_btn").pack(side="left")
+
+        tree_frame = ttk.Frame(top, padding=(10, 6, 10, 0))
         tree_frame.pack(fill="both", expand=True)
 
-        tree = ttk.Treeview(tree_frame, columns=("selected",), show="tree headings")
-        tree.heading("#0", text=self._tr("file_column"))
-        tree.heading("selected", text="")
-        tree.column("#0", width=340, stretch=True)
-        tree.column("selected", width=50, anchor="center", stretch=False)
+        tree = ttk.Treeview(tree_frame, columns=("selected", "count", "size"),
+                            show="tree headings")
+        tree.column("#0", width=380, stretch=True)
+        tree.column("selected", width=54, anchor="center", stretch=False)
+        tree.column("count", width=80, anchor="e", stretch=False)
+        tree.column("size", width=96, anchor="e", stretch=False)
 
         vscroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vscroll.set)
         tree.pack(side="left", fill="both", expand=True)
         vscroll.pack(side="right", fill="y")
 
-        CHECKED, UNCHECKED = "☑", "☐"
+        # Three states, because per-file selection makes "some of this folder" reachable:
+        # a folder whose subtree is partly picked is neither checked nor unchecked.
+        CHECKED, UNCHECKED, PARTIAL = "☑", "☐", "▣"
+        LAZY_MARKER = "__lazy__"
+        SEARCH_RESULT_LIMIT = 400
 
         node_to_item = {}
         item_to_node = {}
+        # (column key, descending). Name ascending is the default the tree is built in.
+        sort_state = {"key": "name", "desc": False}
 
-        def insert_pnode(parent_item, node):
-            iid = tree.insert(parent_item, "end", text=node.name, values=("",), open=True)
-            node_to_item[node] = iid
-            item_to_node[iid] = node
-            for child in sorted(node.children.values(), key=lambda n: n.name.casefold()):
-                insert_pnode(iid, child)
-
-        for child in sorted(proot.children.values(), key=lambda n: n.name.casefold()):
-            insert_pnode("", child)
-
-        def is_disabled(node):
+        def covered_by_ancestor(node):
             anc = node.parent
             while anc is not None and anc is not proot:
-                if anc.rel in selected:
+                if anc.rel in selected_folders:
                     return True
                 anc = anc.parent
             return False
 
-        def refresh_all_glyphs():
+        def subtree_has_selection(node):
+            if node.is_file:
+                return node.rel in selected_files
+            if node.rel in selected_folders:
+                return True
+            return any(subtree_has_selection(child) for child in node.children.values())
+
+        def glyph_for(node):
+            if node.is_file:
+                return CHECKED if (node.rel in selected_files or covered_by_ancestor(node)) else UNCHECKED
+            if node.rel in selected_folders or covered_by_ancestor(node):
+                return CHECKED
+            return PARTIAL if subtree_has_selection(node) else UNCHECKED
+
+        def sort_key(node):
+            key = sort_state["key"]
+            if key == "selected":
+                order = {CHECKED: 0, PARTIAL: 1, UNCHECKED: 2}[glyph_for(node)]
+                return (order, node.name.casefold())
+            if key == "count":
+                return (-node.count, node.name.casefold())
+            if key == "size":
+                return (-node.size, node.name.casefold())
+            # Folders before files at the same level, then alphabetically: a flat mix of the
+            # two is much harder to scan in a folder holding hundreds of shards.
+            return (node.is_file, node.name.casefold())
+
+        def sorted_children(node):
+            children = sorted(node.children.values(), key=sort_key)
+            if sort_state["desc"]:
+                children.reverse()
+            return children
+
+        def row_values(node):
+            return (glyph_for(node),
+                    f"{node.count:,}" if not node.is_file else "",
+                    format_size(node.size))
+
+        def insert_node(parent_item, node):
+            iid = tree.insert(parent_item, "end", text=node.name, values=row_values(node),
+                              open=False)
+            node_to_item[node] = iid
+            item_to_node[iid] = node
+            if node.children:
+                # A placeholder child is what makes the expand arrow appear without paying
+                # for the subtree: it is swapped for the real rows on first open.
+                tree.insert(iid, "end", iid=f"{iid}::lazy", text="", values=("", "", ""),
+                            tags=(LAZY_MARKER,))
+            return iid
+
+        def populate(item):
+            node = item_to_node.get(item)
+            if node is None:
+                return
+            children = tree.get_children(item)
+            if not (len(children) == 1 and children[0].endswith("::lazy")):
+                return  # already real
+            tree.delete(children[0])
+            for child in sorted_children(node):
+                insert_node(item, child)
+
+        def on_open(_event=None):
+            populate(tree.focus())
+
+        tree.bind("<<TreeviewOpen>>", on_open)
+
+        def rebuild_tree():
+            """Full repaint of the top level. Only ever inserts the roots; everything deeper
+            comes back through populate() as the user expands it again."""
+            tree.delete(*tree.get_children(""))
+            node_to_item.clear()
+            item_to_node.clear()
+            for child in sorted_children(proot):
+                insert_node("", child)
+
+        def refresh_visible_glyphs():
+            """Repaints only rows that currently exist in the widget. Unexpanded subtrees
+            have no rows to repaint, which is what keeps a click cheap at 30,000 files."""
             full = var_use_full.get()
-            for node, iid in node_to_item.items():
-                glyph = CHECKED if (not full and node.rel in selected) else UNCHECKED
+            for iid, node in list(item_to_node.items()):
+                if not tree.exists(iid):
+                    continue
+                glyph = UNCHECKED if full else glyph_for(node)
                 tree.set(iid, "selected", glyph)
-                tree.item(iid, tags=("disabled",) if (full or is_disabled(node)) else ())
+                disabled = full or covered_by_ancestor(node)
+                tree.item(iid, tags=("disabled",) if disabled else ())
             tree.tag_configure("disabled", foreground="#888888")
+            update_summary()
 
         def clear_descendants(node):
             for child in node.children.values():
-                selected.discard(child.rel)
+                selected_folders.discard(child.rel)
+                selected_files.discard(child.rel)
                 clear_descendants(child)
 
         def clear_ancestors(node):
             anc = node.parent
             while anc is not None and anc is not proot:
-                selected.discard(anc.rel)
+                selected_folders.discard(anc.rel)
                 anc = anc.parent
 
-        def toggle_pklz(node):
-            # Selecting a parent unchecks and disables all descendants (their scan is already
-            # covered by the parent's own subtree search). Selecting a child unchecks its
-            # ancestors (a more specific choice supersedes the broader one). Siblings remain
-            # independently selectable throughout.
-            if is_disabled(node):
+        def toggle_node(node):
+            # Same rule as before, now covering files too: picking a parent supersedes (and
+            # visually disables) everything under it, and picking something inside clears the
+            # broader choice above it. Siblings stay independent.
+            if covered_by_ancestor(node):
                 return
-            if node.rel in selected:
-                selected.discard(node.rel)
+            if node.is_file:
+                if node.rel in selected_files:
+                    selected_files.discard(node.rel)
+                else:
+                    clear_ancestors(node)
+                    selected_files.add(node.rel)
             else:
-                clear_ancestors(node)
-                clear_descendants(node)
-                selected.add(node.rel)
-            refresh_all_glyphs()
+                if node.rel in selected_folders:
+                    selected_folders.discard(node.rel)
+                else:
+                    clear_ancestors(node)
+                    clear_descendants(node)
+                    selected_folders.add(node.rel)
+            refresh_visible_glyphs()
 
-        def on_pklz_click(event):
+        def on_click(event):
             if var_use_full.get():
                 return
             if tree.identify_region(event.x, event.y) != "cell":
@@ -3185,33 +3569,220 @@ class WerZatSongGUI(tk.Tk):
                 return
             node = item_to_node.get(tree.identify_row(event.y))
             if node is not None:
-                toggle_pklz(node)
+                toggle_node(node)
 
-        tree.bind("<Button-1>", on_pklz_click)
+        tree.bind("<Button-1>", on_click)
+
+        # ---- search -------------------------------------------------------------
+        # Searching abandons the tree for a flat result list: matches can sit anywhere in a
+        # three-level structure, and expanding every branch that happens to contain one is
+        # both slow and unreadable. Each hit shows its full relative path instead.
+        def apply_search(*_args):
+            needle = var_search.get().strip().casefold()
+            if not needle:
+                rebuild_tree()
+                refresh_visible_glyphs()
+                return
+            tree.delete(*tree.get_children(""))
+            node_to_item.clear()
+            item_to_node.clear()
+            hits = [n for n in all_nodes if needle in n.rel.casefold()]
+            hits.sort(key=sort_key)
+            if sort_state["desc"]:
+                hits.reverse()
+            shown = hits[:SEARCH_RESULT_LIMIT]
+            for node in shown:
+                iid = tree.insert("", "end", text=node.rel, values=row_values(node), open=False)
+                node_to_item[node] = iid
+                item_to_node[iid] = node
+            if len(hits) > len(shown):
+                tree.insert("", "end", text=self._tr("pklz_search_truncated",
+                                                     shown=len(shown), total=len(hits)),
+                            values=("", "", ""), tags=("disabled",))
+            refresh_visible_glyphs()
+
+        var_search.trace_add("write", apply_search)
+
+        # ---- sorting ------------------------------------------------------------
+        def sort_by(key):
+            if sort_state["key"] == key:
+                sort_state["desc"] = not sort_state["desc"]
+            else:
+                sort_state["key"] = key
+                sort_state["desc"] = False
+            update_headings()
+            if var_search.get().strip():
+                apply_search()
+            else:
+                rebuild_tree()
+                refresh_visible_glyphs()
+
+        def update_headings():
+            arrow = " ▼" if sort_state["desc"] else " ▲"
+            for key, label_key in (("name", "file_column"), ("selected", "pklz_selected_column"),
+                                   ("count", "pklz_files_column"), ("size", "pklz_size_column")):
+                text = self._tr(label_key) + (arrow if sort_state["key"] == key else "")
+                tree.heading("#0" if key == "name" else key, text=text,
+                             command=(lambda k=key: sort_by(k)))
+
+        update_headings()
+
+        # ---- summary + actions --------------------------------------------------
+        summary_label = ttk.Label(top, padding=(10, 6, 10, 0))
+        summary_label.pack(fill="x")
+
+        def current_selection_stats():
+            resolved = selected_pklz_set(files_index, selected_folders, selected_files)
+            return len(resolved), sum(files_index[r] for r in resolved)
+
+        def update_summary():
+            if var_use_full.get():
+                summary_label.config(text=self._tr(
+                    "pklz_summary_full", count=len(files_index),
+                    size=format_size(sum(files_index.values()))))
+                return
+            count, size = current_selection_stats()
+            summary_label.config(text=self._tr(
+                "pklz_summary_selection", folders=len(selected_folders),
+                files=len(selected_files), count=count, size=format_size(size)))
 
         def refresh_enabled():
-            refresh_all_glyphs()
+            state = "disabled" if var_use_full.get() else "normal"
+            search_entry.config(state=state)
+            btn_deselect.config(state=state)
+            refresh_visible_glyphs()
 
-        refresh_enabled()
-
-        action_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
+        action_frame = ttk.Frame(top, padding=(10, 8, 10, 10))
         action_frame.pack(fill="x")
+
+        def deselect_all():
+            selected_folders.clear()
+            selected_files.clear()
+            refresh_visible_glyphs()
+
+        btn_deselect = self._add_text_widget(
+            ttk.Button(action_frame, command=deselect_all), "pklz_deselect_all_btn")
+        btn_deselect.pack(side="left")
 
         def do_save():
             use_full_val = var_use_full.get()
-            if not use_full_val and not selected:
+            if not use_full_val and not selected_folders and not selected_files:
                 messagebox.showwarning(self._tr("warning_title"), self._tr("pklz_selection_required"))
                 return
-            self._save_pklz_selection(use_full_val, sorted(selected))
+            folders_out = sorted(selected_folders)
+            files_out = sorted(selected_files)
+            count, size = (len(files_index), sum(files_index.values())) if use_full_val \
+                else current_selection_stats()
+            names = folders_out + files_out
+            summary = {"use_full": use_full_val, "folders": len(folders_out),
+                       "files": len(files_out), "pklz_count": count, "bytes": size,
+                       "names": names[:12], "names_total": len(names)}
+            self._save_pklz_selection(use_full_val, folders_out, files_out, summary)
+            self._refresh_pklz_summary_label()
             top.destroy()
+            # Staging runs after the dialog closes so its progress window owns the screen on
+            # its own, and is skipped entirely when nothing would move.
+            self._stage_pklz_selection_async(db_dir, use_full_val, folders_out, files_out)
 
         self._add_text_widget(ttk.Button(action_frame, command=do_save),
                               "save_btn").pack(side="right", padx=2)
         self._add_text_widget(ttk.Button(action_frame, command=top.destroy),
                               "cancel_btn").pack(side="right", padx=2)
 
+        rebuild_tree()
+        refresh_enabled()
+        search_entry.focus_set()
+
         top.protocol("WM_DELETE_WINDOW", top.destroy)
         top.grab_set()
+
+    def _stage_pklz_selection_async(self, db_dir, use_full, folders, files):
+        """Moves .pklz files between the database and database/___TEMP to match a
+        just-saved selection, on a worker thread behind a small modal progress window.
+
+        Threaded because a selection can span tens of thousands of files; the window is
+        modal because the database must not be re-selected or scanned while it is being
+        rearranged. Every UI touch from the worker goes through self.after()."""
+        # Planned first, on this thread, purely to decide whether a window is warranted: the
+        # walk is ~2s at 30,000 files and the common case (nothing changed) shows nothing.
+        files_index, staged = scan_pklz_database(db_dir)
+        wanted = set() if use_full else selected_pklz_set(files_index, folders, files)
+        pending = len(wanted - staged) + len(staged - wanted)
+        if pending == 0:
+            return
+
+        win = tk.Toplevel(self)
+        win.title(self._tr("pklz_staging_title"))
+        win.transient(self)
+        win.resizable(False, False)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack(fill="both", expand=True)
+        label = ttk.Label(frame, text=self._tr("pklz_staging_progress", done=0, total=pending))
+        label.pack(anchor="w")
+        bar = ttk.Progressbar(frame, mode="determinate", maximum=pending, length=340)
+        bar.pack(fill="x", pady=(8, 0))
+        win.grab_set()
+        win.protocol("WM_DELETE_WINDOW", lambda: None)  # closing mid-move would orphan files
+
+        state = {"last": 0.0}
+
+        def on_progress(done, total):
+            # Throttled: a per-file UI update across 12,000 files costs more than the moves.
+            now = time.time()
+            if done == total or now - state["last"] >= 0.1:
+                state["last"] = now
+                self.after(0, lambda d=done, t=total: (
+                    bar.config(value=d),
+                    label.config(text=self._tr("pklz_staging_progress", done=d, total=t))))
+
+        def worker():
+            try:
+                self._apply_pklz_staging(db_dir, use_full, folders, files, progress=on_progress)
+            finally:
+                self.after(0, win.destroy)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _pklz_summary_tooltip(self):
+        """Hover text for the summary label: the actual folder/file names chosen, capped at
+        the dozen stored in the summary so a 400-entry selection cannot produce a tooltip
+        taller than the screen."""
+        names = getattr(self, "_pklz_summary_names", None)
+        if not names:
+            return ""
+        total = getattr(self, "_pklz_summary_names_total", len(names))
+        lines = list(names)
+        if total > len(names):
+            lines.append(self._tr("pklz_summary_more", count=total - len(names)))
+        return "\n".join(lines)
+
+    def _refresh_pklz_summary_label(self):
+        """Updates the one-line description of the saved PKLZ selection shown beside the
+        Select PKLZ Folders... button. Reads the summary written at save time rather than
+        walking the database, so opening the app costs nothing."""
+        label = getattr(self, "pklz_summary_label", None)
+        if label is None:
+            return
+        data = load_json_file(PKLZ_FOLDERS_FILE, None)
+        summary = data.get("summary") if isinstance(data, dict) else None
+        if not isinstance(summary, dict):
+            use_full = True if not isinstance(data, dict) else bool(data.get("use_full_database", True))
+            label.config(text=self._tr("pklz_selected_full" if use_full else "pklz_selected_unknown"))
+            self._pklz_summary_names = []
+            return
+        if summary.get("use_full"):
+            label.config(text=self._tr("pklz_selected_full"))
+            self._pklz_summary_names = []
+            return
+        label.config(text=self._tr("pklz_selected_summary",
+                                   folders=summary.get("folders", 0),
+                                   files=summary.get("files", 0),
+                                   count=summary.get("pklz_count", 0),
+                                   size=format_size(summary.get("bytes", 0))))
+        names = summary.get("names") or []
+        total = summary.get("names_total", len(names))
+        self._pklz_summary_names = list(names)
+        self._pklz_summary_names_total = total
 
     def _open_processed_folder(self):
         """Opens PROCESSED_DIR (assets/listsProcessed/) in Explorer. Replaces the old
@@ -3858,13 +4429,26 @@ class WerZatSongGUI(tk.Tk):
             raise PipelineAbort(self._tr("no_pending_songs_msg"))
 
         if config.get("mode_audfprint"):
-            use_full, folders, _db_mismatch = self._load_pklz_selection()
+            use_full, folders, files, _db_mismatch = self._load_pklz_selection()
+            if not use_full and not folders and not files:
+                raise PipelineAbort(self._tr("pklz_selection_required"))
+            # Staging is re-applied at the start of every scan, not only when the dialog
+            # saves: files added or hand-moved since, or a move interrupted mid-way, would
+            # otherwise leave ___TEMP disagreeing with the saved selection and Audfprint
+            # searching something other than what the user picked.
+            db_dir = config.get("db_dir", DEFAULT_DB_DIR)
+            staged_count = self._apply_pklz_staging(db_dir, use_full, folders, files)
             if use_full:
                 pklz_targets = [""]
             else:
-                pklz_targets = list(folders)
-                if not pklz_targets:
-                    raise PipelineAbort(self._tr("pklz_selection_required"))
+                if staged_count == 0:
+                    raise PipelineAbort(self._tr("pklz_selection_empty_on_disk"))
+                self._log(self._tr("log_pklz_target_staged", dir=pklz_staging_dir(db_dir),
+                                    count=staged_count))
+                # A single target whatever was selected: gathering the selection into one
+                # folder is exactly what makes the old one-run-per-subfolder loop (and its
+                # regenerate-every-variation-per-target cost) unnecessary.
+                pklz_targets = [TEMP_STAGING_DIRNAME]
         else:
             # Audfprint disabled: a single "no-op" target, so the mode loop below still runs
             # exactly once per mode instead of needing a separate no-PKLZ code path.
