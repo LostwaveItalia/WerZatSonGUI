@@ -161,6 +161,7 @@ PROCESSED_DIR = os.path.join(ASSETS_FOLDER, "listsProcessed")
 PROCESSED_SONGS_QUICK_FILE = os.path.join(PROCESSED_DIR, "processed-songs-mode-quick.json")
 PROCESSED_SONGS_LONG_FILE = os.path.join(PROCESSED_DIR, "processed-songs-mode-long.json")
 PKLZ_FOLDERS_FILE = os.path.join(PROCESSED_DIR, "pklz-folders-to-process.json")
+SELECTION_SUMMARY_FILE = os.path.join(PROCESSED_DIR, "selection-summary.json")
 LEGACY_PROCESSED_FILE = os.path.join(CUR_FOLDER, "PROCESSED.txt")
 TEMP_STAGING_DIRNAME = "___TEMP"
 
@@ -170,7 +171,8 @@ DEFAULT_LOG_DIR = os.path.join(CUR_FOLDER, "logs")
 DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
 DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
 CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
-APP_VERSION = "2.0.0"
+FORCE_STOP_LOG_MARKER_FILE = os.path.join(CUR_FOLDER, "force_stop_log_pending.json")
+APP_VERSION = "2.1.0"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
 PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"
@@ -953,6 +955,29 @@ def format_size(num_bytes):
         size /= 1024
     return f"{size:.1f} TB"
 
+def compute_fully_checked_folders(all_files_set, checked_set):
+    """Returns the top-most folder rel paths (relative to input_dir, os.sep-separated)
+    whose every audio file (recursively) is in checked_set. Subfolders of an already-
+    listed fully-checked folder are omitted, since they're implied by their parent."""
+    from collections import defaultdict
+    folder_total = defaultdict(int)
+    folder_checked = defaultdict(int)
+    for rel in all_files_set:
+        parts = rel.split(os.sep)
+        accum = ""
+        for i in range(len(parts) - 1):
+            accum = parts[i] if not accum else os.path.join(accum, parts[i])
+            folder_total[accum] += 1
+            if rel in checked_set:
+                folder_checked[accum] += 1
+    fully = {f for f, n in folder_total.items() if n == folder_checked[f]}
+    top = []
+    for f in sorted(fully):
+        if any(f != anc and f.startswith(anc + os.sep) for anc in fully):
+            continue
+        top.append(f)
+    return top
+
 
 # ------------------------------------------------------------------
 # PKLZ staging (database/___TEMP)
@@ -1147,8 +1172,16 @@ class _Tooltip:
         self._tip = tk.Toplevel(self.widget)
         self._tip.wm_overrideredirect(True)
         self._tip.wm_geometry(f"+{x}+{y}")
-        ttk.Label(self._tip, text=text, justify="left", padding=(8, 5),
-                  relief="solid", borderwidth=1).pack()
+        frame = ttk.Frame(self._tip, padding=(8, 5), relief="solid", borderwidth=1)
+        frame.pack()
+        if isinstance(text, str):
+            ttk.Label(frame, text=text, justify="left").pack(anchor="w")
+        else:
+            for item_text, is_bold in text:
+                kwargs = {"text": item_text, "justify": "left"}
+                if is_bold:
+                    kwargs["font"] = ("Segoe UI", 9, "bold")
+                ttk.Label(frame, **kwargs).pack(anchor="w")
 
     def _hide(self, _event=None):
         self._cancel()
@@ -1423,9 +1456,9 @@ class WerZatSongGUI(tk.Tk):
             show_btn.config(text=self._tr("show_btn"))
             if key in self.env_hide_buttons:
                 self.env_hide_buttons[key].config(text=self._tr("hide_btn"))
-        # The PKLZ selection summary is built from counts at display time rather than being a
+        # The selection summary is built from counts at display time rather than being a
         # fixed string, so it is not in _text_widgets and has to be re-rendered by hand.
-        self._refresh_pklz_summary_label()
+        self._refresh_selection_summary_label()
         # Update window title
         if hasattr(self, '_is_first_time_setup') and self._is_first_time_setup:
             self.title(self._tr("first_time_setup_title"))
@@ -1604,7 +1637,8 @@ class WerZatSongGUI(tk.Tk):
         self._recompute_command()
         self._save_config_to_disk()
         self._sync_webhook_js()
-        self._set_all_texts()  # Ensure all texts are set after building
+        self._set_all_texts()
+        self.after(300, self._check_pending_force_stop_log)
 
     # ------------------------------------------------------------------
     # First-time setup (CASE 1)
@@ -1992,12 +2026,10 @@ class WerZatSongGUI(tk.Tk):
         # What is currently selected, right where the selecting happens: without it the only
         # way to know was to reopen the dialog and wait for the database to be walked.
         # Filled from the summary saved alongside the selection, so it costs no disk access.
-        self.pklz_summary_label = ttk.Label(selection_frame, foreground="#888888")
-        self.pklz_summary_label.pack(side="left", padx=(8, 0))
-        self._pklz_summary_names = []
-        self._pklz_summary_names_total = 0
-        _Tooltip(self.pklz_summary_label, self._pklz_summary_tooltip)
-        self._refresh_pklz_summary_label()
+        self.selection_summary_label = ttk.Label(selection_frame, foreground="#888888")
+        self.selection_summary_label.pack(side="left", padx=(8, 0))
+        _Tooltip(self.selection_summary_label, self._selection_summary_tooltip)
+        self._refresh_selection_summary_label()
 
         # Scan Mode: the reworked replacement for the old boolean generate_different_tempos
         # checkbox, now a three-way choice deciding which search modes actually run this
@@ -2827,15 +2859,11 @@ class WerZatSongGUI(tk.Tk):
                                 old_dir=stored_db_dir, new_dir=current_db_dir))
         return use_full, folders, files, mismatch
 
-    def _save_pklz_selection(self, use_full, folders, files=(), summary=None):
-        """summary is a small dict the General tab shows next to the button (counts, total
-        size, first few names) so that displaying the current selection at startup never
-        needs the database walked."""
+    def _save_pklz_selection(self, use_full, folders, files=()):
         current_db_dir = self.config_data.get("db_dir", DEFAULT_DB_DIR)
         data = {"version": 2, "database_dir": current_db_dir,
-                "use_full_database": bool(use_full), "folders": list(folders), "files": list(files)}
-        if summary:
-            data["summary"] = summary
+                "use_full_database": bool(use_full),
+                "folders": list(folders), "files": list(files)}
         return atomic_write_json(PKLZ_FOLDERS_FILE, data)
 
     def _apply_pklz_staging(self, db_dir, use_full, folders, files, progress=None):
@@ -3061,109 +3089,124 @@ class WerZatSongGUI(tk.Tk):
 # ------------------------------------------------------------------
 
     def _open_song_selection_menu(self):
-        """Opens the Song Selection dialog: a tree of input_dir with a Quick/Long checkbox
-        per song, replacing the old "Mark all audio files as processed in" buttons. Saves two
-        JSON files listing which songs are EXCLUDED from (or already completed in) each mode;
-        see PROCESSED_SONGS_QUICK_FILE / PROCESSED_SONGS_LONG_FILE and _save_song_selection.
-        The dialog's checkboxes are independent of the current scan_mode: they describe
-        per-song state the user is free to edit in preparation for either this session or a
-        future one, so no column is ever greyed out based on the current scan_mode."""
+        """Opens the Song Selection dialog: a searchable, sortable tree of input_dir with
+        a Quick/Long checkbox per song, a Filetype column, and a Files/Size column
+        (aggregated up through folders). Mirrors the PKLZ Selection dialog's UX.
+        Saves two processed-songs JSON files (the unchecked = processed/excluded set)
+        plus the combined Song summary used by the General tab's summary label."""
         input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
         if not os.path.exists(input_dir):
             messagebox.showerror(self._tr("error_title"), self._tr("input_dir_not_found", dir=input_dir))
             return
 
-        all_files = []
+        all_files = {}
         for root, dirs, files in os.walk(input_dir):
             if TEMP_STAGING_DIRNAME in dirs:
                 dirs.remove(TEMP_STAGING_DIRNAME)
             for file in files:
                 if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
                     full_path = os.path.join(root, file)
-                    all_files.append(os.path.relpath(full_path, input_dir))
+                    rel = os.path.relpath(full_path, input_dir)
+                    try:
+                        all_files[rel] = os.path.getsize(full_path)
+                    except OSError:
+                        all_files[rel] = 0
 
         if not all_files:
             messagebox.showinfo(self._tr("info_title"), self._tr("no_audio_files_found", dir=input_dir))
             return
 
-        # Malformed JSON / input_dir mismatch both come back as an empty processed set from
-        # _load_processed_songs (which also logs its own warning on a mismatch), so every song
-        # simply shows up as pending in that column: a safe default, never a crash.
         quick_processed, _ = self._load_processed_songs("quick")
         long_processed, _ = self._load_processed_songs("long")
 
-        # Per-file pending state: True means "checked" (candidate for that mode). Stale
-        # entries in the JSONs (paths that no longer exist on disk) simply never match
-        # anything in all_files, so they can't affect any checkbox here, and get pruned
-        # automatically the next time _save_processed_songs succeeds.
         file_state = {
             rel: {"quick": rel not in quick_processed, "long": rel not in long_processed}
             for rel in all_files
         }
 
         class _SongNode:
-            __slots__ = ("name", "rel", "is_file", "children", "parent")
+            __slots__ = ("name", "rel", "is_file", "ext", "size", "count", "children", "parent")
 
-            def __init__(self, name, rel, is_file, parent=None):
+            def __init__(self, name, rel, is_file, ext="", size=0, parent=None):
                 self.name = name
                 self.rel = rel
                 self.is_file = is_file
+                self.ext = ext
+                self.size = size
+                self.count = 1 if is_file else 0
                 self.children = {}
                 self.parent = parent
 
         root_node = _SongNode("", "", False)
-        for rel in all_files:
+        all_nodes = []
+        for rel, size in all_files.items():
             parts = rel.split(os.sep)
             node = root_node
             accum = ""
             for i, part in enumerate(parts):
                 accum = part if not accum else os.path.join(accum, part)
                 is_file = (i == len(parts) - 1)
-                if part not in node.children:
-                    node.children[part] = _SongNode(part, accum, is_file, node)
-                node = node.children[part]
-
-        def sorted_children(node):
-            # Folders first, then files, each group sorted case-insensitively: a user
-            # scanning a long folder list for one song benefits from a stable, predictable
-            # order instead of os.walk's arbitrary one.
-            return sorted(node.children.values(), key=lambda n: (n.is_file, n.name.casefold()))
+                child = node.children.get(part)
+                if child is None:
+                    if is_file:
+                        ext = os.path.splitext(part)[1].lower().lstrip(".")
+                        child = _SongNode(part, accum, True, ext=ext, size=size, parent=node)
+                    else:
+                        child = _SongNode(part, accum, False, parent=node)
+                    node.children[part] = child
+                    all_nodes.append(child)
+                node = child
+            walker = node.parent
+            while walker is not None and walker is not root_node:
+                walker.size += size
+                walker.count += 1
+                walker = walker.parent
 
         top = tk.Toplevel(self)
         top.title(self._tr("song_selection_title"))
         top.transient(self)
-        top.geometry("680x560")
-        top.minsize(520, 380)
+        top.geometry("860x620")
+        top.minsize(640, 420)
 
-        # Explains, up front, what the two columns are and what checking both means for a
-        # song: this is the answer to "how do I know what happens when I check both modes for
-        # a song", asked for directly rather than only through the "?" popup.
         self._add_text_widget(
-            ttk.Label(top, wraplength=640, justify="left", padding=(10, 8, 10, 0)),
+            ttk.Label(top, wraplength=820, justify="left", padding=(10, 8, 10, 0)),
             "song_selection_both_modes_note"
         ).pack(fill="x")
 
-        tree_frame = ttk.Frame(top, padding=10)
+        var_search = tk.StringVar()
+
+        search_row = ttk.Frame(top, padding=(10, 6, 10, 0))
+        search_row.pack(fill="x")
+        self._add_text_widget(ttk.Label(search_row, text=""), "pklz_search_label").pack(side="left")
+        search_entry = ttk.Entry(search_row, textvariable=var_search)
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        self._add_text_widget(ttk.Button(search_row, command=lambda: var_search.set("")),
+                              "pklz_search_clear_btn").pack(side="left")
+
+        tree_frame = ttk.Frame(top, padding=(10, 6, 10, 0))
         tree_frame.pack(fill="both", expand=True)
 
-        tree = ttk.Treeview(tree_frame, columns=("quick", "long"), show="tree headings")
-        tree.heading("#0", text=self._tr("file_column"))
-        tree.heading("quick", text=self._tr("quick_column"))
-        tree.heading("long", text=self._tr("long_column"))
-        tree.column("#0", width=360, stretch=True)
-        tree.column("quick", width=110, anchor="center", stretch=False)
-        tree.column("long", width=110, anchor="center", stretch=False)
+        tree = ttk.Treeview(tree_frame,
+                            columns=("quick", "long", "filetype", "count", "size"),
+                            show="tree headings")
+        tree.column("#0", width=250, stretch=True)
+        tree.column("quick", width=80, anchor="center", stretch=False)
+        tree.column("long", width=80, anchor="center", stretch=False)
+        tree.column("filetype", width=70, anchor="center", stretch=False)
+        tree.column("count", width=60, anchor="e", stretch=False)
+        tree.column("size", width=90, anchor="e", stretch=False)
 
         vscroll = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vscroll.set)
         tree.pack(side="left", fill="both", expand=True)
         vscroll.pack(side="right", fill="y")
 
-        # Checkbox glyphs are non-ASCII and render via whatever font the current Tk theme
-        # provides. On Windows 10/11 with Segoe UI these three are expected to render fine;
-        # if a visual check on the target install shows a fallback glyph, swap these three
-        # constants for "[x]" / "[ ]" / "[-]" instead. Uglier, but bulletproof everywhere.
         CHECKED, UNCHECKED, PARTIAL = "☑", "☐", "▣"
+        SEARCH_RESULT_LIMIT = 400
+
+        node_to_item = {}
+        item_to_node = {}
+        sort_state = {"key": "name", "desc": False}
 
         def glyph_for(checked):
             return CHECKED if checked else UNCHECKED
@@ -3189,65 +3232,102 @@ class WerZatSongGUI(tk.Tk):
                 return "checked"
             return "partial"
 
-        node_to_item = {}
-        item_to_node = {}
+        def sort_key(node):
+            key = sort_state["key"]
+            if key in ("quick", "long"):
+                if node.is_file:
+                    order = 0 if file_state[node.rel][key] else 2
+                else:
+                    order = {"checked": 0, "partial": 1, "unchecked": 2}[folder_tristate(node, key)]
+                return (order, node.name.casefold())
+            if key == "filetype":
+                return (node.is_file, node.ext, node.name.casefold())
+            if key == "count":
+                return (-node.count, node.name.casefold())
+            if key == "size":
+                return (-node.size, node.name.casefold())
+            return (node.is_file, node.name.casefold())
 
-        def update_folder_glyph(node):
-            iid = node_to_item[node]
-            glyph_map = {"checked": CHECKED, "unchecked": UNCHECKED, "partial": PARTIAL}
-            tree.set(iid, "quick", glyph_map[folder_tristate(node, "quick")])
-            tree.set(iid, "long", glyph_map[folder_tristate(node, "long")])
+        def sorted_children(node):
+            children = sorted(node.children.values(), key=sort_key)
+            if sort_state["desc"]:
+                children.reverse()
+            return children
 
-        def insert_node(parent_item, node):
+        def row_values(node):
             if node.is_file:
                 state = file_state[node.rel]
-                iid = tree.insert(parent_item, "end", text=node.name,
-                                   values=(glyph_for(state["quick"]), glyph_for(state["long"])))
-            else:
-                iid = tree.insert(parent_item, "end", text=node.name, values=("", ""), open=True)
+                return (glyph_for(state["quick"]), glyph_for(state["long"]),
+                        node.ext, "", format_size(node.size))
+            glyph_map = {"checked": CHECKED, "unchecked": UNCHECKED, "partial": PARTIAL}
+            return (glyph_map[folder_tristate(node, "quick")],
+                    glyph_map[folder_tristate(node, "long")],
+                    "", f"{node.count:,}", format_size(node.size))
+
+        def insert_node(parent_item, node):
+            iid = tree.insert(parent_item, "end", text=node.name, values=row_values(node), open=True)
             node_to_item[node] = iid
             item_to_node[iid] = node
             if not node.is_file:
                 for child in sorted_children(node):
                     insert_node(iid, child)
-                update_folder_glyph(node)
 
-        for child in sorted_children(root_node):
-            insert_node("", child)
+        def rebuild_tree():
+            tree.delete(*tree.get_children(""))
+            node_to_item.clear()
+            item_to_node.clear()
+            for child in sorted_children(root_node):
+                insert_node("", child)
+
+        def update_summary():
+            quick_count = 0
+            long_count = 0
+            total_count = 0
+            total_bytes = 0
+            for rel, state in file_state.items():
+                in_q = state["quick"]
+                in_l = state["long"]
+                if in_q:
+                    quick_count += 1
+                if in_l:
+                    long_count += 1
+                if in_q or in_l:
+                    total_count += 1
+                    total_bytes += all_files.get(rel, 0)
+            if total_count == 0:
+                summary_label.config(text=self._tr("song_summary_empty"))
+                return
+            summary_label.config(text=self._tr("song_summary_selection",
+                count=total_count, quick=quick_count, long=long_count,
+                size=format_size(total_bytes)))
+
+        def refresh_visible_glyphs():
+            for iid, node in list(item_to_node.items()):
+                if not tree.exists(iid):
+                    continue
+                tree.item(iid, values=row_values(node))
+            update_summary()
 
         def set_subtree(node, mode, value):
             if node.is_file:
                 file_state[node.rel][mode] = value
-                tree.set(node_to_item[node], mode, glyph_for(value))
             else:
                 for child in node.children.values():
                     set_subtree(child, mode, value)
-
-        def refresh_ancestors(node):
-            anc = node.parent
-            while anc is not None and anc is not root_node:
-                update_folder_glyph(anc)
-                anc = anc.parent
 
         def toggle(node, mode):
             if node.is_file:
                 set_subtree(node, mode, not file_state[node.rel][mode])
             else:
-                # Folder click: standard checkbox-tree behavior. If the folder isn't fully
-                # checked (i.e. it's unchecked or partial), check every descendant; if it's
-                # fully checked, uncheck every descendant. Partial states propagate upward via
-                # refresh_ancestors below.
                 new_value = folder_tristate(node, mode) != "checked"
                 set_subtree(node, mode, new_value)
-                update_folder_glyph(node)
-            refresh_ancestors(node)
+            refresh_visible_glyphs()
 
         def on_tree_click(event):
             if tree.identify_region(event.x, event.y) != "cell":
                 return
             col = tree.identify_column(event.x)
-            row = tree.identify_row(event.y)
-            node = item_to_node.get(row)
+            node = item_to_node.get(tree.identify_row(event.y))
             if node is None:
                 return
             if col == "#1":
@@ -3258,11 +3338,62 @@ class WerZatSongGUI(tk.Tk):
         tree.bind("<Button-1>", on_tree_click)
 
         def select_all(mode, value):
-            set_subtree(root_node, mode, value)
-            for node in node_to_item:
-                if not node.is_file:
-                    update_folder_glyph(node)
+            for child in root_node.children.values():
+                set_subtree(child, mode, value)
+            refresh_visible_glyphs()
 
+        # ---- search ---------------------------------------------------------
+        def apply_search(*_args):
+            needle = var_search.get().strip().casefold()
+            if not needle:
+                rebuild_tree()
+                return
+            tree.delete(*tree.get_children(""))
+            node_to_item.clear()
+            item_to_node.clear()
+            hits = [n for n in all_nodes if needle in n.rel.casefold()]
+            hits.sort(key=sort_key)
+            if sort_state["desc"]:
+                hits.reverse()
+            shown = hits[:SEARCH_RESULT_LIMIT]
+            for node in shown:
+                iid = tree.insert("", "end", text=node.rel, values=row_values(node), open=False)
+                node_to_item[node] = iid
+                item_to_node[iid] = node
+            if len(hits) > len(shown):
+                tree.insert("", "end",
+                            text=self._tr("pklz_search_truncated",
+                                          shown=len(shown), total=len(hits)),
+                            values=("", "", "", "", ""), tags=("disabled",))
+            tree.tag_configure("disabled", foreground="#888888")
+
+        var_search.trace_add("write", apply_search)
+
+        # ---- sorting --------------------------------------------------------
+        def sort_by(key):
+            if sort_state["key"] == key:
+                sort_state["desc"] = not sort_state["desc"]
+            else:
+                sort_state["key"] = key
+                sort_state["desc"] = False
+            update_headings()
+            if var_search.get().strip():
+                apply_search()
+            else:
+                rebuild_tree()
+
+        def update_headings():
+            arrow = " ▼" if sort_state["desc"] else " ▲"
+            for key, label_key in (("name", "file_column"), ("quick", "quick_column"),
+                                   ("long", "long_column"), ("filetype", "song_filetype_column"),
+                                   ("count", "pklz_files_column"), ("size", "pklz_size_column")):
+                text = self._tr(label_key) + (arrow if sort_state["key"] == key else "")
+                tree.heading("#0" if key == "name" else key, text=text,
+                             command=(lambda k=key: sort_by(k)))
+
+        update_headings()
+
+        # ---- buttons + save -------------------------------------------------
         btn_frame = ttk.Frame(top, padding=(10, 0, 10, 6))
         btn_frame.pack(fill="x")
         self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("quick", True)),
@@ -3274,6 +3405,9 @@ class WerZatSongGUI(tk.Tk):
         self._add_text_widget(ttk.Button(btn_frame, command=lambda: select_all("long", False)),
                               "clear_long_btn").pack(side="left", padx=2)
 
+        summary_label = ttk.Label(top, padding=(10, 6, 10, 0), foreground="#888888")
+        summary_label.pack(fill="x")
+
         action_frame = ttk.Frame(top, padding=(10, 0, 10, 10))
         action_frame.pack(fill="x")
 
@@ -3281,6 +3415,7 @@ class WerZatSongGUI(tk.Tk):
             quick_checked = {rel for rel, state in file_state.items() if state["quick"]}
             long_checked = {rel for rel, state in file_state.items() if state["long"]}
             self._save_song_selection(quick_checked, long_checked)
+            self._refresh_selection_summary_label()
             top.destroy()
 
         self._add_text_widget(ttk.Button(action_frame, command=do_save),
@@ -3288,30 +3423,99 @@ class WerZatSongGUI(tk.Tk):
         self._add_text_widget(ttk.Button(action_frame, command=top.destroy),
                               "cancel_btn").pack(side="right", padx=2)
 
+        rebuild_tree()
+        update_summary()
+        search_entry.focus_set()
+
         top.protocol("WM_DELETE_WINDOW", top.destroy)
         top.grab_set()
 
     def _save_song_selection(self, quick_checked, long_checked):
         """quick_checked/long_checked: the full relative paths (from the Song Selection
-        dialog) that are checked, i.e. candidates for that mode. Saves the complement (the
-        files that are NOT checked, meaning already processed or deliberately excluded) to
-        each mode's JSON, via _save_processed_songs, which itself owns the input_dir mismatch
-        guard: if a JSON's stored input_dir doesn't match the current one, that JSON's save is
-        silently refused (and logged), so a user opening this dialog purely to inspect the
-        tree can never surprise-corrupt a mismatched file. Re-walks input_dir rather than
-        trusting the dialog's own file list, in case something on disk changed while the
-        dialog was open."""
+        dialog) that are checked, i.e. candidates for that mode. Saves the complement
+        (the files that are NOT checked, meaning already processed or deliberately
+        excluded) to each mode's JSON, then writes the combined Song summary used by
+        the General tab's summary label and its hover tooltip. Fully-checked folders
+        are collapsed in the summary (replacing the individual files under them), so
+        the tooltip lists folders where it makes sense, exactly like the PKLZ side."""
         input_dir = self.config_data.get("input_dir", DEFAULT_INPUT_DIR)
-        all_files = set()
+        all_files = {}
         for root, dirs, files in os.walk(input_dir):
             if TEMP_STAGING_DIRNAME in dirs:
                 dirs.remove(TEMP_STAGING_DIRNAME)
             for file in files:
                 if os.path.splitext(file)[1].lower() in AUDIO_EXTENSIONS:
-                    all_files.add(os.path.relpath(os.path.join(root, file), input_dir))
+                    full = os.path.join(root, file)
+                    rel = os.path.relpath(full, input_dir)
+                    try:
+                        all_files[rel] = os.path.getsize(full)
+                    except OSError:
+                        all_files[rel] = 0
 
-        self._save_processed_songs("quick", all_files - quick_checked)
-        self._save_processed_songs("long", all_files - long_checked)
+        all_rel = set(all_files.keys())
+        # Save the processed-songs JSONs (the user's actual scan-state change), but
+        # do NOT gate the summary save on their results. The summary is a display
+        # hint about what the user picked in this dialog, and it must stay accurate
+        # even when both processed-songs writes are refused (e.g. both JSONs are
+        # stuck in input_dir mismatch state).
+        self._save_processed_songs("quick", all_rel - quick_checked)
+        self._save_processed_songs("long", all_rel - long_checked)
+
+        selected = quick_checked | long_checked
+
+        def mode_of(rel):
+            in_q = rel in quick_checked
+            in_l = rel in long_checked
+            if in_q and in_l:
+                return "both"
+            return "quick" if in_q else "long"
+
+        # Aggregate counters for the summary line.
+        filetypes = {}
+        bytes_total = 0
+        for rel in selected:
+            ext = os.path.splitext(rel)[1].lower().lstrip(".")
+            filetypes[ext] = filetypes.get(ext, 0) + 1
+            bytes_total += all_files.get(rel, 0)
+
+        # Collapse fully-checked folders into single tooltip rows.
+        full_folders = compute_fully_checked_folders(all_rel, selected)
+        covered = set()
+        names = []
+        for folder in full_folders:
+            prefix = folder + os.sep
+            folder_q = folder_l = False
+            for rel in selected:
+                if rel == folder or rel.startswith(prefix):
+                    covered.add(rel)
+                    m = mode_of(rel)
+                    if m in ("quick", "both"):
+                        folder_q = True
+                    if m in ("long", "both"):
+                        folder_l = True
+            if folder_q and folder_l:
+                mode = "both"
+            elif folder_q:
+                mode = "quick"
+            else:
+                mode = "long"
+            names.append([folder, mode])
+        for rel in sorted(selected):
+            if rel in covered:
+                continue
+            names.append([rel, mode_of(rel)])
+
+        summary = {
+            "all_selected": selected == all_rel,
+            "count": len(selected),
+            "quick_count": len(quick_checked),
+            "long_count": len(long_checked),
+            "filetypes": filetypes,
+            "bytes": bytes_total,
+            "names": names[:12],
+            "names_total": len(names),
+        }
+        self._save_selection_summary_part("songs", summary)
 
     def _open_pklz_selection_menu(self):
         """Opens the PKLZ Selection dialog: a lazily-expanded tree of the Audfprint database
@@ -3430,6 +3634,36 @@ class WerZatSongGUI(tk.Tk):
         # (column key, descending). Name ascending is the default the tree is built in.
         sort_state = {"key": "name", "desc": False}
 
+        def is_ancestor_of(anc, node):
+            n = node.parent
+            while n is not None and n is not proot:
+                if n is anc:
+                    return True
+                n = n.parent
+            return False
+
+        def build_selection_except(excluded):
+            """Returns (folders, files) covering everything in the tree except `excluded`
+            and its descendants. Used the first time the user unchecks a single row while
+            'Use full database' is checked."""
+            folders = set()
+            files = set()
+
+            def walk(parent):
+                for child in parent.children.values():
+                    if child is excluded:
+                        continue
+                    if is_ancestor_of(child, excluded):
+                        walk(child)
+                    else:
+                        if child.is_file:
+                            files.add(child.rel)
+                        else:
+                            folders.add(child.rel)
+
+            walk(proot)
+            return folders, files
+
         def covered_by_ancestor(node):
             anc = node.parent
             while anc is not None and anc is not proot:
@@ -3445,10 +3679,26 @@ class WerZatSongGUI(tk.Tk):
                 return True
             return any(subtree_has_selection(child) for child in node.children.values())
 
+        def subtree_fully_selected(node):
+            """True when every .pklz file at or under `node` is selected, whether
+            that is via the node itself or an ancestor being in selected_folders,
+            or via every individual descendant file being in selected_files. Used so
+            a folder whose files have all been clicked one by one still reads as
+            fully selected, exactly like the Song Selection dialog already does."""
+            if node.is_file:
+                return node.rel in selected_files or covered_by_ancestor(node)
+            if node.rel in selected_folders or covered_by_ancestor(node):
+                return True
+            if not node.children:
+                return False
+            return all(subtree_fully_selected(child) for child in node.children.values())
+
         def glyph_for(node):
             if node.is_file:
                 return CHECKED if (node.rel in selected_files or covered_by_ancestor(node)) else UNCHECKED
             if node.rel in selected_folders or covered_by_ancestor(node):
+                return CHECKED
+            if subtree_fully_selected(node):
                 return CHECKED
             return PARTIAL if subtree_has_selection(node) else UNCHECKED
 
@@ -3514,16 +3764,19 @@ class WerZatSongGUI(tk.Tk):
                 insert_node("", child)
 
         def refresh_visible_glyphs():
-            """Repaints only rows that currently exist in the widget. Unexpanded subtrees
-            have no rows to repaint, which is what keeps a click cheap at 30,000 files."""
+            """Repaints only rows that currently exist in the widget. When 'Use full
+            database' is checked, every row shows as checked and none are greyed out,
+            so the user can click a specific row to start editing the selection."""
             full = var_use_full.get()
             for iid, node in list(item_to_node.items()):
                 if not tree.exists(iid):
                     continue
-                glyph = UNCHECKED if full else glyph_for(node)
-                tree.set(iid, "selected", glyph)
-                disabled = full or covered_by_ancestor(node)
-                tree.item(iid, tags=("disabled",) if disabled else ())
+                if full:
+                    tree.set(iid, "selected", CHECKED)
+                    tree.item(iid, tags=())
+                else:
+                    tree.set(iid, "selected", glyph_for(node))
+                    tree.item(iid, tags=("disabled",) if covered_by_ancestor(node) else ())
             tree.tag_configure("disabled", foreground="#888888")
             update_summary()
 
@@ -3552,24 +3805,63 @@ class WerZatSongGUI(tk.Tk):
                     clear_ancestors(node)
                     selected_files.add(node.rel)
             else:
-                if node.rel in selected_folders:
+                # A folder is "effectively checked" if it, an ancestor, or every single
+                # descendant file is selected. Clicking such a folder unchecks the whole
+                # subtree (dropping the folder's own explicit entry if it had one); otherwise
+                # it checks the folder explicitly. Without this, a folder whose files were
+                # all clicked individually would LOOK checked but clicking it would silently
+                # re-add it as an explicit selection instead of toggling it off.
+                if node.rel in selected_folders or subtree_fully_selected(node):
                     selected_folders.discard(node.rel)
+                    clear_descendants(node)
                 else:
                     clear_ancestors(node)
                     clear_descendants(node)
                     selected_folders.add(node.rel)
             refresh_visible_glyphs()
 
+        def is_all_selected():
+            resolved = selected_pklz_set(files_index, selected_folders, selected_files)
+            return len(resolved) == len(files_index)
+
         def on_click(event):
-            if var_use_full.get():
-                return
             if tree.identify_region(event.x, event.y) != "cell":
                 return
             if tree.identify_column(event.x) != "#1":
                 return
             node = item_to_node.get(tree.identify_row(event.y))
-            if node is not None:
-                toggle_node(node)
+            if node is None:
+                return
+
+            # First click while "Use full database" is checked: convert the implicit
+            # "everything" selection into an explicit one that covers everything
+            # *except* this node, then uncheck the full-database option.
+            if var_use_full.get():
+                folders, files = build_selection_except(node)
+                selected_folders.clear()
+                selected_folders.update(folders)
+                selected_files.clear()
+                selected_files.update(files)
+                var_use_full.set(False)
+                refresh_enabled()
+                return
+
+            toggle_node(node)
+
+            # If everything is now (again) covered, switch back to full-database mode,
+            # which means the scan uses the plain database root and no --folder flag.
+            # This runs the full selected_pklz_set() walk once per click; at 30k files
+            # that is ~50-100ms, which is fine for a user-driven click. A top-level-only
+            # shortcut would be wrong: a user can individually check every file in every
+            # folder without ever ticking a top-level folder, and that is still
+            # "everything selected" logically.
+            if is_all_selected():
+                var_use_full.set(True)
+                selected_folders.clear()
+                selected_files.clear()
+                refresh_enabled()
+            else:
+                refresh_visible_glyphs()
 
         tree.bind("<Button-1>", on_click)
 
@@ -3635,6 +3927,38 @@ class WerZatSongGUI(tk.Tk):
             resolved = selected_pklz_set(files_index, selected_folders, selected_files)
             return len(resolved), sum(files_index[r] for r in resolved)
 
+        def collapsed_view():
+            """Returns (names, folders_count, files_count) for the *display* view of
+            the tree, not the raw storage. A folder whose every .pklz is selected
+            -- whether the user ticked the folder itself or every file inside it
+            one by one -- collapses to a single folder entry, and its files are
+            not counted separately. Both the in-dialog summary label and the saved
+            summary (used by the General tab's tooltip) go through this, so they
+            always agree."""
+            names = []
+            folders = 0
+            files = 0
+
+            def walk(node):
+                nonlocal folders, files
+                if subtree_fully_selected(node):
+                    if node.is_file:
+                        files += 1
+                    else:
+                        folders += 1
+                    names.append(node.rel)
+                    return
+                if node.is_file:
+                    return
+                for child in sorted(node.children.values(),
+                                    key=lambda n: (n.is_file, n.name.casefold())):
+                    walk(child)
+
+            for child in sorted(proot.children.values(),
+                                key=lambda n: (n.is_file, n.name.casefold())):
+                walk(child)
+            return names, folders, files
+
         def update_summary():
             if var_use_full.get():
                 summary_label.config(text=self._tr(
@@ -3642,9 +3966,10 @@ class WerZatSongGUI(tk.Tk):
                     size=format_size(sum(files_index.values()))))
                 return
             count, size = current_selection_stats()
+            _, folders_shown, files_shown = collapsed_view()
             summary_label.config(text=self._tr(
-                "pklz_summary_selection", folders=len(selected_folders),
-                files=len(selected_files), count=count, size=format_size(size)))
+                "pklz_summary_selection", folders=folders_shown,
+                files=files_shown, count=count, size=format_size(size)))
 
         def refresh_enabled():
             state = "disabled" if var_use_full.get() else "normal"
@@ -3669,19 +3994,22 @@ class WerZatSongGUI(tk.Tk):
             if not use_full_val and not selected_folders and not selected_files:
                 messagebox.showwarning(self._tr("warning_title"), self._tr("pklz_selection_required"))
                 return
-            folders_out = sorted(selected_folders)
-            files_out = sorted(selected_files)
+
+            display_names, display_folders, display_files = (( [], 0, 0 ) if use_full_val
+                                                            else collapsed_view())
+
+            folders_out = sorted(selected_folders) if not use_full_val else []
+            files_out = sorted(selected_files) if not use_full_val else []
             count, size = (len(files_index), sum(files_index.values())) if use_full_val \
                 else current_selection_stats()
-            names = folders_out + files_out
-            summary = {"use_full": use_full_val, "folders": len(folders_out),
-                       "files": len(files_out), "pklz_count": count, "bytes": size,
-                       "names": names[:12], "names_total": len(names)}
-            self._save_pklz_selection(use_full_val, folders_out, files_out, summary)
-            self._refresh_pklz_summary_label()
+
+            summary = {"use_full": use_full_val, "folders": display_folders,
+                       "files": display_files, "count": count, "bytes": size,
+                       "names": display_names[:12], "names_total": len(display_names)}
+            self._save_pklz_selection(use_full_val, folders_out, files_out)
+            self._save_selection_summary_part("pklz", summary)
+            self._refresh_selection_summary_label()
             top.destroy()
-            # Staging runs after the dialog closes so its progress window owns the screen on
-            # its own, and is skipped entirely when nothing would move.
             self._stage_pklz_selection_async(db_dir, use_full_val, folders_out, files_out)
 
         self._add_text_widget(ttk.Button(action_frame, command=do_save),
@@ -3743,47 +4071,6 @@ class WerZatSongGUI(tk.Tk):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _pklz_summary_tooltip(self):
-        """Hover text for the summary label: the actual folder/file names chosen, capped at
-        the dozen stored in the summary so a 400-entry selection cannot produce a tooltip
-        taller than the screen."""
-        names = getattr(self, "_pklz_summary_names", None)
-        if not names:
-            return ""
-        total = getattr(self, "_pklz_summary_names_total", len(names))
-        lines = list(names)
-        if total > len(names):
-            lines.append(self._tr("pklz_summary_more", count=total - len(names)))
-        return "\n".join(lines)
-
-    def _refresh_pklz_summary_label(self):
-        """Updates the one-line description of the saved PKLZ selection shown beside the
-        Select PKLZ Folders... button. Reads the summary written at save time rather than
-        walking the database, so opening the app costs nothing."""
-        label = getattr(self, "pklz_summary_label", None)
-        if label is None:
-            return
-        data = load_json_file(PKLZ_FOLDERS_FILE, None)
-        summary = data.get("summary") if isinstance(data, dict) else None
-        if not isinstance(summary, dict):
-            use_full = True if not isinstance(data, dict) else bool(data.get("use_full_database", True))
-            label.config(text=self._tr("pklz_selected_full" if use_full else "pklz_selected_unknown"))
-            self._pklz_summary_names = []
-            return
-        if summary.get("use_full"):
-            label.config(text=self._tr("pklz_selected_full"))
-            self._pklz_summary_names = []
-            return
-        label.config(text=self._tr("pklz_selected_summary",
-                                   folders=summary.get("folders", 0),
-                                   files=summary.get("files", 0),
-                                   count=summary.get("pklz_count", 0),
-                                   size=format_size(summary.get("bytes", 0))))
-        names = summary.get("names") or []
-        total = summary.get("names_total", len(names))
-        self._pklz_summary_names = list(names)
-        self._pklz_summary_names_total = total
-
     def _open_processed_folder(self):
         """Opens PROCESSED_DIR (assets/listsProcessed/) in Explorer. Replaces the old
         _open_processed_file, which opened the single PROCESSED.txt file directly: there are
@@ -3793,6 +4080,119 @@ class WerZatSongGUI(tk.Tk):
             os.startfile(PROCESSED_DIR)
         except Exception as e:
             messagebox.showerror(self._tr("error_title"), self._tr("processed_file_open_error", error=e))
+
+    # ------------------------------------------------------------------
+    # Combined Song + PKLZ selection summary
+    # ------------------------------------------------------------------
+
+    def _load_selection_summary(self):
+        data = load_json_file(SELECTION_SUMMARY_FILE, None)
+        return data if isinstance(data, dict) else {}
+
+    def _save_selection_summary_part(self, part, part_data):
+        data = self._load_selection_summary()
+        data["version"] = 1
+        data[part] = part_data
+        atomic_write_json(SELECTION_SUMMARY_FILE, data)
+
+    def _refresh_selection_summary_label(self):
+        """Updates the one-line description of the current Song and PKLZ selections
+        shown beside the Select buttons on the General tab. Reads the summary saved
+        at dialog-save time (assets/listsProcessed/selection-summary.json) rather than
+        walking the database or the input folder, so opening the app costs nothing.
+        The placeholder is shown until at least one of the two dialogs has been saved."""
+        label = getattr(self, "selection_summary_label", None)
+        if label is None:
+            return
+        data = self._load_selection_summary()
+        songs = data.get("songs") if isinstance(data.get("songs"), dict) else None
+        pklz = data.get("pklz") if isinstance(data.get("pklz"), dict) else None
+        if songs is None and pklz is None:
+            label.config(text=self._tr("selection_summary_placeholder"))
+            return
+
+        songs = songs or {}
+        pklz = pklz or {}
+
+        songs_count = songs.get("count", 0) or 0
+        songs_all = bool(songs.get("all_selected", False))
+        pklz_use_full = bool(pklz.get("use_full", True)) if "use_full" in pklz else True
+        pklz_folders = pklz.get("folders", 0) or 0
+        pklz_files = pklz.get("files", 0) or 0
+        pklz_count = pklz.get("count", 0) or 0
+        song_filetypes = songs.get("filetypes") or {}
+        song_bytes = songs.get("bytes", 0) or 0
+        pklz_bytes = pklz.get("bytes", 0) or 0
+
+        if songs_all:
+            songs_part = self._tr("selection_summary_all_songs")
+        else:
+            songs_part = self._tr("selection_summary_songs", count=songs_count)
+
+        if pklz_use_full:
+            pklz_part = self._tr("selection_summary_full_pklz")
+        else:
+            pklz_part = self._tr("selection_summary_pklz",
+                                 folders=pklz_folders, files=pklz_files)
+
+        # The bracketed breakdown only adds information when at least one side
+        # is a non-trivial partial selection.
+        show_brackets = (not songs_all and songs_count > 0) or (not pklz_use_full)
+        bracket = ""
+        if show_brackets:
+            parts = []
+            for ext in sorted(song_filetypes.keys()):
+                parts.append(f"{song_filetypes[ext]} {ext.upper()}(s)")
+            if not pklz_use_full:
+                parts.append(f"{pklz_count} PKLZ(s)")
+            parts.append(format_size(song_bytes + pklz_bytes))
+            bracket = " [" + ", ".join(parts) + "]"
+
+        label.config(text=f"{songs_part}, {pklz_part}{bracket}.")
+
+    def _selection_summary_tooltip(self):
+        """Hover text for the summary label. Returns a list of (text, is_bold) rows
+        so the Songs: / Fingerprints: headers can be bold, or "" to suppress the
+        tooltip entirely when there is nothing concrete to list."""
+        data = self._load_selection_summary()
+        songs = data.get("songs") if isinstance(data.get("songs"), dict) else {}
+        pklz = data.get("pklz") if isinstance(data.get("pklz"), dict) else {}
+
+        songs_all = bool(songs.get("all_selected", False))
+        songs_count = songs.get("count", 0) or 0
+        pklz_use_full = bool(pklz.get("use_full", True)) if "use_full" in pklz else True
+
+        lines = []
+
+        if not songs_all and songs_count > 0:
+            lines.append((self._tr("selection_summary_songs_section"), True))
+            names = songs.get("names") or []
+            total = songs.get("names_total", len(names))
+            for entry in names:
+                if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                    name, mode = entry[0], entry[1]
+                else:
+                    name, mode = str(entry), "both"
+                if mode == "both":
+                    mode_text = self._tr("selection_summary_mode_both")
+                elif mode == "quick":
+                    mode_text = self._tr("selection_summary_mode_quick")
+                else:
+                    mode_text = self._tr("selection_summary_mode_long")
+                lines.append((f"{name} ({mode_text})", False))
+            if total > len(names):
+                lines.append((self._tr("pklz_summary_more", count=total - len(names)), False))
+
+        if not pklz_use_full:
+            lines.append((self._tr("selection_summary_fingerprints_section"), True))
+            names = pklz.get("names") or []
+            total = pklz.get("names_total", len(names))
+            for name in names:
+                lines.append((str(name), False))
+            if total > len(names):
+                lines.append((self._tr("pklz_summary_more", count=total - len(names)), False))
+
+        return lines if lines else ""
 
 # ------------------------------------------------------------------
 # Add pklz / audio files
@@ -4189,6 +4589,60 @@ class WerZatSongGUI(tk.Tk):
             messagebox.showerror(self._tr("error_title"),
                                 self._tr("crash_log_open_error", error=e))
 
+    def _save_force_stop_console_log(self):
+        """Saves a snapshot of the current console contents to a specially-named
+        'FORCE_STOP' log file, then writes a small marker file so the freshly
+        relaunched instance can tell the user about it on startup (see
+        _check_pending_force_stop_log). Returns the log path, or None on failure."""
+        console_logs_dir = (self.dir_vars["console_logs_dir"].get().strip()
+                            if "console_logs_dir" in self.dir_vars
+                            else self.config_data.get("console_logs_dir", DEFAULT_CONSOLE_LOGS_DIR))
+        try:
+            os.makedirs(console_logs_dir, exist_ok=True)
+        except Exception:
+            return None
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{timestamp}_v{APP_VERSION}_FORCE_STOP_CLog.txt"
+        filepath = os.path.join(console_logs_dir, filename)
+        try:
+            content = self.console.get("1.0", "end-1c")
+            with open(filepath, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+        except Exception:
+            return None
+
+        try:
+            with open(FORCE_STOP_LOG_MARKER_FILE, "w", encoding="utf-8") as f:
+                json.dump({"log_path": filepath}, f)
+        except Exception:
+            pass
+        return filepath
+
+    def _check_pending_force_stop_log(self):
+        """Called shortly after normal (case 2) boot. If the previous instance left a
+        marker file announcing a force-stop console log, tells the user about it and
+        clears the marker so the alert only appears once."""
+        if not os.path.exists(FORCE_STOP_LOG_MARKER_FILE):
+            return
+        log_path = None
+        try:
+            with open(FORCE_STOP_LOG_MARKER_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                log_path = data.get("log_path")
+        except Exception:
+            pass
+        try:
+            os.remove(FORCE_STOP_LOG_MARKER_FILE)
+        except Exception:
+            pass
+        if log_path and os.path.exists(log_path):
+            messagebox.showinfo(
+                self._tr("force_stop_log_saved_title"),
+                self._tr("force_stop_log_saved_msg", path=log_path)
+            )
+
     # ------------------------------------------------------------------
     # Start WerZatSong (ported temp/werzatsongrunner.py pipeline)
     # ------------------------------------------------------------------
@@ -4324,6 +4778,8 @@ class WerZatSongGUI(tk.Tk):
             return
         if not messagebox.askyesno(self._tr("force_stop_confirm_title"), self._tr("force_stop_confirm_msg")):
             return
+
+        self._save_force_stop_console_log()
         self.btn_force_stop.configure(state="disabled")
         self._log(self._tr("log_force_stop"))
         threading.Thread(target=self._force_stop_worker, daemon=True).start()

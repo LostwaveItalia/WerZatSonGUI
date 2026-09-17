@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-orange)
+![Version: 2.1.0](https://img.shields.io/badge/Version-2.1.0-orange)
 
 ![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
@@ -364,6 +364,7 @@ Split into eight tabs so related settings are grouped together. Each individual 
 
 - **Scan Mode:** a three-way switch, **Quick only**, **Long only** or **Both**, that decides which search modes actually run in the current session. See [*Running a Scan: Quick vs. Long Mode*](#running-a-scan-quick-vs-long-mode) below for what each option does.
 - **Select Songs...** and **Select PKLZ Folders...:** sit side by side above the Scan Mode row, sharing a single **[?]** button to their left. Clicking it opens a small chooser letting you pick which of the two explanations to read. **Select Songs...** opens a dialog listing every song in your Input Directory with a Quick/Long checkbox each, replacing the old "Mark all audio files as processed in" buttons. **Select PKLZ Folders...** opens a dialog listing the subfolders of your Audfprint Database Directory, letting you restrict Audfprint searches to specific ones instead of always searching the whole database (its explanation covers the trade-offs of picking more than one subfolder). See [*Processed Songs and Selection Dialogs*](#processed-songs-and-selection-dialogs) below for both.
+- **Selection summary:** a short summary of what is currently selected appears right next to the two buttons above, combining both selections. It looks something like `10 songs, 2 fingerprint folders, 2 fingerprint files [9 MP3(s), 1 M4A(s), 16 PKLZ(s), 500.00 MB].`. When the full PKLZ database is used, only the songs are reported (`10 songs, full fingerprint database.`), and vice versa (`All songs, 2 fingerprint folders, 2 fingerprint files [...]`). Hovering it lists the actual song and folder/file names under bold **Songs:** and **Fingerprints:** headers, each song annotated with the mode(s) it is checked for (**Quick**, **Long** or **Both**). Nothing is shown until at least one of the two dialogs has been saved once; before that, a placeholder is displayed.
 - **Theme:** Changes the visual appearance of the application. Set to **Light,** **Dark,** or **System Default** to automatically match your OS settings.
 - **Language:** Switches the interface between **English** and another supported language. Takes effect immediately, no restart required (see [*Adding a Language / Translations*](#adding-a-language--translations) below if you'd like to help add more).
 
@@ -449,13 +450,15 @@ WerZatSonGUI keeps track of which songs have already been scanned using two JSON
 ![Song Selection dialog](assets/images/song_selection_dialog.png)
 ![PKLZ Folder Selection dialog](assets/images/pklz_selection_dialog.png)
 
-To change which songs are pending, open **Select Songs...** (see the **General tab** above): it shows every song in your Input Directory as a tree, with a **Quick** and a **Long** checkbox on each row. Clicking a folder's checkbox toggles every song inside it at once. This dialog is where the old "Mark all audio files as processed in" workflow now lives, without needing to hand-edit a text file afterwards.
+To change which songs are pending, open **Select Songs...** (see the **General tab** above): it shows every song in your Input Directory as a searchable, sortable tree, with a **Quick** and a **Long** checkbox on each row, plus a **Filetype** column (blank for folders) and **Files** / **Size** columns (aggregated through folders). Clicking a folder's checkbox toggles every song inside it at once. The **Search** box filters songs and folders at once (matching the relative path); clicking any column heading sorts by it, and clicking the same heading again reverses the order. This dialog is where the old "Mark all audio files as processed in" workflow now lives, without needing to hand-edit a text file afterwards.
 
 Each JSON file also stores the input directory it was written for. If you later change your **Input Directory** setting, the corresponding file is ignored on read and left untouched on write, so its list survives in case you move the input folder back. The first scan after such a change shows a prompt offering to reset the file to match your current Input Directory (keeping the already-processed entries, just updating the stored path).
 
 To change which fingerprints a scan searches, open **Select PKLZ Folders...**. It shows your Audfprint Database Directory as a tree with a checkbox on every folder and on every individual `.pklz` file, plus a **Files** and a **Size** column so you can see what a row actually costs before ticking it. Ticking a folder covers everything inside it; ticking something deeper clears the broader choice above it. A folder whose subtree is only partly selected shows a third, "partial" checkbox state.
 
-Folders start **collapsed** and their contents are only loaded when you open them, which is what keeps the dialog usable on a large database (a 30,000-file database opens in about two seconds, and the largest single folder in it expands in well under one). The **Search** box filters every folder and file at once, showing matches as full paths; clicking any column heading sorts by it, and clicking the same heading again reverses the order. **Deselect all** clears the selection without touching **Use full database**. Once saved, a short summary of what you picked appears next to the button on the **General tab**, and hovering it lists the actual names.
+When **Use full database** is checked, every row is shown as checked, so the whole selection is visible at a glance. Clicking any row to uncheck it automatically turns **Use full database** off and immediately stages the remaining selection into `___TEMP`; nothing is moved while the checkbox is still on, since the plain database root is searched directly. If you later re-tick everything (by hand, one row at a time), **Use full database** re-ticks itself and the scan reverts to the plain database root (no `--folder` flag, no `___TEMP` staging).
+
+Folders start **collapsed** and their contents are only loaded when you open them, which is what keeps the dialog usable on a large database (a 30,000-file database opens in about two seconds, and the largest single folder in it expands in well under one). The **Search** box filters every folder and file at once, showing matches as full paths; clicking any column heading sorts by it, and clicking the same heading again reverses the order. **Deselect all** clears the selection without touching **Use full database**.
 
 Audfprint can only be aimed at a folder, so saving a selection physically **moves** the chosen `.pklz` files into a `___TEMP` folder inside your database that mirrors its structure, and the scan searches that folder instead. Deselecting moves them back, and **Use full database** moves everything back and deletes `___TEMP` entirely, so every file is always either in its original place or in `___TEMP`, never anywhere else. Moves happen when you press **Save**, behind a progress window, and are re-applied at the start of every scan so the staging folder always matches what you saved even if files were added or moved by hand in between. Nothing is ever overwritten: if a file already exists at its destination the move is skipped and a `[WARNING]` naming it is printed.
 
@@ -498,6 +501,6 @@ WerZatSonGUI currently ships with **English**, **Italian**, **French** and **Por
 
 ## Credits
 
-- **WerZatSonGUI v2.0.0** by some random account, with contributions from EierkuchenHD and VoidGod. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_.
+- **WerZatSonGUI v2.1.0** by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65 and Numerophobe. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_, Mystic65.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.
