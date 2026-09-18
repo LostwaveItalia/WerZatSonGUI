@@ -76,5 +76,20 @@
 	"acoustid_key_invalid": "La clé API AcoustID que vous avez saisie n'est pas valide",
 	"webhook_missing_warning": "Le webhook Discord n'est pas défini dans le fichier .env. Veuillez fournir une URL de webhook Discord valide",
 	"webhook_prompt": "Collez ici l'URL de votre webhook Discord: ",
-	"webhook_invalid": "L'URL du webhook Discord que vous avez saisie n'est pas valide"
+	"webhook_invalid": "L'URL du webhook Discord que vous avez saisie n'est pas valide",
+	"audiotag_no_keys_configured": "Le mode multi-clés AudioTag est activé, mais aucune clé API utilisable n'est configurée dans audiotag_keys.json. Ajoutez au moins une clé depuis l'onglet AudioTag des Paramètres avancés",
+	"audiotag_no_keys_configured_runtime": "Aucune clé AudioTag utilisable n'est configurée; AudioTag sera ignoré pour le reste de cette exécution",
+	"audiotag_no_keys_available_skipping": "Aucune clé AudioTag utilisable ne reste; la recherche AudioTag pour \"{file}\" est ignorée",
+	"audiotag_checkpoint_pause": "Point de contrôle AudioTag atteint ({count} pistes sur cette clé): pause de {seconds}s avant de continuer, afin de rester bien en dessous des limites de débit d'AudioTag",
+	"audiotag_key_rotated": "Utilisation désormais de la clé AudioTag se terminant par {suffix}",
+	"audiotag_key_marked_exhausted": "La clé AudioTag se terminant par {suffix} n'a plus de crédit et a été marquée comme épuisée",
+	"audiotag_key_marked_invalid": "La clé AudioTag se terminant par {suffix} a été rejetée par le serveur et a été marquée comme invalide",
+	"audiotag_extending_short_clip": "\"{file}\" ne dure que {duration}s; il est mis en boucle jusqu'à {target}s avant d'être envoyé à AudioTag",
+	"audiotag_duration_probe_failed": "Impossible de déterminer la durée de \"{file}\" ({error}). Poursuite avec le fichier original tel quel",
+	"audiotag_stat_summary": "État du compte AudioTag pour la clé active: {balance} de solde de crédit, {freeSecRemainder}s de budget d'identification gratuit restant, {queries} requêtes totales effectuées",
+	"audiotag_error_too_short": "AudioTag a rejeté \"{file}\" car trop court ({error}). Essayez d'augmenter le paramètre de durée minimale du clip",
+	"audiotag_error_bad_audio": "AudioTag n'a pas pu lire \"{file}\": {error}",
+	"audiotag_error_server_unavailable": "Problème du serveur AudioTag lors de la recherche de \"{file}\": {error}. Ceci est généralement temporaire",
+	"audiotag_error_invalid_token": "La recherche AudioTag pour \"{file}\" a échoué: le jeton de la requête a expiré avant qu'un résultat ne soit prêt ({error})",
+	"audiotag_error_unknown": "La recherche AudioTag pour \"{file}\" a échoué avec une erreur non reconnue: {error}"
 }

@@ -47,7 +47,7 @@ try:
 
     import tkinter as tk
     import tkinter.font as tkfont
-    from tkinter import ttk, filedialog, messagebox
+    from tkinter import ttk, filedialog, messagebox, simpledialog
     from tkinter.scrolledtext import ScrolledText
 
 except Exception as e:
@@ -115,7 +115,7 @@ except Exception as e:
             import tkinter as tk
             from tkinter import messagebox
             
-            # Create a hidden main window so we just get the popup
+            # Creates a hidden main window so the user just gets the popup
             root = tk.Tk()
             root.withdraw()
             messagebox.showerror("WerZatSonGUI Failed To Start", error_msg)
@@ -135,6 +135,8 @@ ASSETS_FOLDER = os.path.join(CUR_FOLDER, "assets")
 CONFIG_FILE = os.path.join(CUR_FOLDER, "config.json")
 ENV_FILE = os.path.join(ASSETS_FOLDER, ".env")
 ENV_EXAMPLE_FILE = os.path.join(ASSETS_FOLDER, ".env.example")
+AUDIOTAG_KEYS_FILE = os.path.join(ASSETS_FOLDER, "audiotag_keys.json")
+AUDIOTAG_KEYS_EXAMPLE_FILE = os.path.join(ASSETS_FOLDER, "audiotag_keys.example.json")
 LOGO_FILE = os.path.join(ASSETS_FOLDER, "logo.png")
 WEBHOOK_JS_FILE = os.path.join(ASSETS_FOLDER, "utils", "webhook.js")
 
@@ -283,9 +285,26 @@ SEARCH_DEPTH_MIN = 1
 SEARCH_DEPTH_MAX = 8
 SEARCH_DEPTH_DEFAULT = 4
 
+# AudioTag safety-dial limits: cooldown/pause are plain seconds, rotate-after-tracks mirrors
+# the Node side's AudiotagKeyManager checkpoint (assets/utils/audiotagKeys.js), and min
+# duration's floor of 5 matches the AudioTag API's own documented minimum file duration.
+AUDIOTAG_COOLDOWN_MIN = 10
+AUDIOTAG_COOLDOWN_MAX = 300
+AUDIOTAG_COOLDOWN_MIN_DEFAULT = 10
+AUDIOTAG_COOLDOWN_MAX_DEFAULT = 30
+AUDIOTAG_ROTATE_AFTER_MIN = 100
+AUDIOTAG_ROTATE_AFTER_MAX = 1000
+AUDIOTAG_ROTATE_AFTER_DEFAULT = 100
+AUDIOTAG_PAUSE_SECONDS_MIN = 60
+AUDIOTAG_PAUSE_SECONDS_MAX = 3600
+AUDIOTAG_PAUSE_SECONDS_DEFAULT = 300
+AUDIOTAG_MIN_DURATION_MIN = 5
+AUDIOTAG_MIN_DURATION_MAX = 60
+AUDIOTAG_MIN_DURATION_DEFAULT = 15
+
 CREATIONFLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 # Used to launch the first-time setup command in its own real console window (rather than
-# piping stdin/stdout through our custom Tk console), so interactive prompts behave exactly
+# piping stdin/stdout through the custom Tk console), so interactive prompts behave exactly
 # like they would if the user typed the command directly into a terminal themselves.
 NEW_CONSOLE_FLAG = subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0
 
@@ -323,8 +342,7 @@ def compute_werzatsong_cmd(config, pklz_folder_override=None):
             if pklz_folder_override != "":
                 # Two separate list elements, "--folder" and the plain folder name: subprocess
                 # itself adds the surrounding quotes when it assembles the final command-line
-                # string that Windows' CreateProcess sees, so we must NOT write quote
-                # characters inside the folder name here ourselves. Doing so would make the
+                # string that Windows' CreateProcess sees. Writing quote characters so would make the
                 # quotes part of the argument's VALUE instead of a string-assembly artifact,
                 # and node's argv parser would then look up a folder whose name literally
                 # starts with a stray '"' character and fail with a confusing "not found"
@@ -377,6 +395,12 @@ def default_config():
         "custom_musicbrainz_duration_range_maxvalue": MUSICBRAINZ_DURATION_MAX_DEFAULT,
         "custom_musicbrainz_extension": False,
         "custom_musicbrainz_extension_value": MUSICBRAINZ_EXTENSION_DEFAULT,
+        "audiotag_use_multiple_keys": False,
+        "custom_audiotag_cooldown_min_value": AUDIOTAG_COOLDOWN_MIN_DEFAULT,
+        "custom_audiotag_cooldown_max_value": AUDIOTAG_COOLDOWN_MAX_DEFAULT,
+        "custom_audiotag_rotate_after_tracks_value": AUDIOTAG_ROTATE_AFTER_DEFAULT,
+        "custom_audiotag_pause_seconds_value": AUDIOTAG_PAUSE_SECONDS_DEFAULT,
+        "custom_audiotag_min_duration_value": AUDIOTAG_MIN_DURATION_DEFAULT,
         "theme_mode": "System",
         "language": "English",
         "create_pklz_hash_tables_on_load_val": False,
@@ -418,7 +442,7 @@ def validate_config(raw):
                      "only_use_fingerprint_subfolder",
                      "use_custom_webhook_name", "use_custom_webhook_image", "use_custom_thread_count",
                      "use_custom_search_depth", "custom_musicbrainz_duration_range", "custom_musicbrainz_extension",
-                     "create_pklz_hash_tables_on_load_val"]
+                     "create_pklz_hash_tables_on_load_val", "audiotag_use_multiple_keys"]
         for key in bool_keys:
             if isinstance(raw.get(key), bool):
                 result[key] = raw[key]
@@ -498,6 +522,31 @@ def validate_config(raw):
                                                MUSICBRAINZ_EXTENSION_MIN, MUSICBRAINZ_EXTENSION_MAX)
         result["custom_musicbrainz_extension_value"] = (
             extension_value if extension_value is not None else MUSICBRAINZ_EXTENSION_DEFAULT)
+
+        cooldown_min = _valid_int_in_range(raw.get("custom_audiotag_cooldown_min_value"),
+                                            AUDIOTAG_COOLDOWN_MIN, AUDIOTAG_COOLDOWN_MAX)
+        result["custom_audiotag_cooldown_min_value"] = (
+            cooldown_min if cooldown_min is not None else AUDIOTAG_COOLDOWN_MIN_DEFAULT)
+
+        cooldown_max = _valid_int_in_range(raw.get("custom_audiotag_cooldown_max_value"),
+                                            AUDIOTAG_COOLDOWN_MIN, AUDIOTAG_COOLDOWN_MAX)
+        result["custom_audiotag_cooldown_max_value"] = (
+            cooldown_max if cooldown_max is not None else AUDIOTAG_COOLDOWN_MAX_DEFAULT)
+
+        rotate_after = _valid_int_in_range(raw.get("custom_audiotag_rotate_after_tracks_value"),
+                                            AUDIOTAG_ROTATE_AFTER_MIN, AUDIOTAG_ROTATE_AFTER_MAX)
+        result["custom_audiotag_rotate_after_tracks_value"] = (
+            rotate_after if rotate_after is not None else AUDIOTAG_ROTATE_AFTER_DEFAULT)
+
+        pause_seconds = _valid_int_in_range(raw.get("custom_audiotag_pause_seconds_value"),
+                                             AUDIOTAG_PAUSE_SECONDS_MIN, AUDIOTAG_PAUSE_SECONDS_MAX)
+        result["custom_audiotag_pause_seconds_value"] = (
+            pause_seconds if pause_seconds is not None else AUDIOTAG_PAUSE_SECONDS_DEFAULT)
+
+        min_duration = _valid_int_in_range(raw.get("custom_audiotag_min_duration_value"),
+                                            AUDIOTAG_MIN_DURATION_MIN, AUDIOTAG_MIN_DURATION_MAX)
+        result["custom_audiotag_min_duration_value"] = (
+            min_duration if min_duration is not None else AUDIOTAG_MIN_DURATION_DEFAULT)
 
     # These two are purely derived/informational: never trust a stale value from disk
     result["envfile_dir"] = ENV_FILE
@@ -711,6 +760,66 @@ def write_env_file(path, env):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write("\n".join(lines) + "\n")
+        return True
+    except Exception:
+        return False
+
+
+# ============================================================================================
+# AudioTag multi-key rotation state (assets/audiotag_keys.json). Both this GUI and the Node
+# side (assets/utils/audiotagKeys.js) read/write this same file, the same way both sides
+# already touch .env: the GUI only ever edits the key list itself (add/remove), while usage
+# counters and status are updated exclusively by the Node side while a scan runs.
+# ============================================================================================
+
+AUDIOTAG_KEY_STATUSES = ("ok", "exhausted", "invalid")
+
+
+def load_audiotag_keys():
+    if not os.path.exists(AUDIOTAG_KEYS_FILE):
+        if os.path.exists(AUDIOTAG_KEYS_EXAMPLE_FILE):
+            try:
+                shutil.copyfile(AUDIOTAG_KEYS_EXAMPLE_FILE, AUDIOTAG_KEYS_FILE)
+            except Exception:
+                pass
+        else:
+            return {"activeIndex": 0, "keys": []}
+    try:
+        with open(AUDIOTAG_KEYS_FILE, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except Exception:
+        raw = {}
+    keys = []
+    for entry in (raw.get("keys", []) if isinstance(raw, dict) else []):
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key", "")).strip()
+        if not key:
+            continue
+        status = entry.get("status")
+        if status not in AUDIOTAG_KEY_STATUSES:
+            status = "ok"
+        tracks_used = entry.get("tracksUsed")
+        if not isinstance(tracks_used, int) or isinstance(tracks_used, bool) or tracks_used < 0:
+            tracks_used = 0
+        keys.append({
+            "key": key,
+            "tracksUsed": tracks_used,
+            "status": status,
+            "lastError": entry.get("lastError") if isinstance(entry.get("lastError"), str) else None,
+            "lastUsedAt": entry.get("lastUsedAt") if isinstance(entry.get("lastUsedAt"), str) else None,
+        })
+    active_index = raw.get("activeIndex") if isinstance(raw, dict) else 0
+    if not isinstance(active_index, int) or isinstance(active_index, bool) or not (0 <= active_index < len(keys)):
+        active_index = 0
+    return {"activeIndex": active_index, "keys": keys}
+
+
+def save_audiotag_keys(data):
+    try:
+        os.makedirs(os.path.dirname(AUDIOTAG_KEYS_FILE), exist_ok=True)
+        with open(AUDIOTAG_KEYS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4)
         return True
     except Exception:
         return False
@@ -1359,6 +1468,8 @@ class WerZatSongGUI(tk.Tk):
         self.env_hide_buttons = {}
         self._env_dirty_keys = set()
         self.env_data = {}
+        self.audiotag_keys_data = load_audiotag_keys()
+        self._sync_body_geometry = None
 
         # None = use whatever config_data says (i.e. pre-orchestration behavior). "" = force
         # a full-database search for this pass. "<x>" = force --folder "<x>" for this pass.
@@ -1392,6 +1503,7 @@ class WerZatSongGUI(tk.Tk):
         self.gui_strings = load_gui_strings(self.language)
         self.var_language = tk.StringVar(value=self.language)
         self.var_language.trace_add("write", self._make_language_trace())
+        self._audiotag_show_keys = tk.BooleanVar(value=False)
 
         # Runs before the UI is built (but after self.gui_strings exists, so any log line it
         # emits is localized). On a fresh install there is nothing to migrate (no legacy
@@ -1785,6 +1897,7 @@ class WerZatSongGUI(tk.Tk):
 
         self._body_canvas = canvas
         self._body_inner = inner
+        self._sync_body_geometry = sync_inner_size
         return inner
 
     def _enable_body_mousewheel(self):
@@ -1852,6 +1965,12 @@ class WerZatSongGUI(tk.Tk):
             else:                              # If hidden, show it
                 content_frame.pack(fill="x", pady=(4, 0))
                 toggle_btn.config(text=self._tr("collapse_btn"))
+            sync = getattr(self, "_sync_body_geometry", None)
+            if sync is not None:
+                try:
+                    sync()
+                except tk.TclError:
+                    pass
 
         toggle_btn.config(command=toggle)
 
@@ -1995,10 +2114,112 @@ class WerZatSongGUI(tk.Tk):
         self._build_tempo_tab(notebook)
         self._build_audfprint_tab(notebook)
         self._build_musicbrainz_tab(notebook)
+        self._build_audiotag_tab(notebook)
         self._build_discord_tab(notebook)
         self._build_hash_tables_tab(notebook)
         self._build_logs_tab(notebook)
         self._build_env_tab(notebook)
+
+        # Tab requested-heights are only known once Tk has laid the UI out at
+        # least once, so autosize setup is deferred to after the first idle cycle.
+        self._advanced_tab_content_heights = []
+        self._advanced_min_content_height = 0
+        self.after(100, self._setup_advanced_autosize)
+
+    def _setup_advanced_autosize(self):
+        """Measures each Advanced Settings tab's natural content height, records
+        the smallest one as the notebook's floor height, then installs the
+        tab-change handler that resizes the notebook to match whichever tab is
+        currently selected. The floor is additionally raised to at least the
+        Search Modes frame's own height, so a short tab never makes the whole
+        row collapse below what the frame beside it needs."""
+        notebook = getattr(self, "_advanced_notebook", None)
+        if notebook is None:
+            return
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            return
+
+        tab_ids = notebook.tabs()
+        if not tab_ids:
+            return
+
+        heights = []
+        for tab_id in tab_ids:
+            frame = notebook.nametowidget(tab_id)
+            try:
+                frame.update_idletasks()
+                heights.append(frame.winfo_reqheight())
+            except tk.TclError:
+                heights.append(0)
+
+        if not any(heights):
+            return
+
+        modes_height = 0
+        modes_frame = getattr(self, "_search_modes_frame", None)
+        if modes_frame is not None:
+            try:
+                modes_frame.update_idletasks()
+                modes_height = modes_frame.winfo_reqheight()
+            except tk.TclError:
+                modes_height = 0
+
+        self._advanced_tab_content_heights = heights
+        self._advanced_min_content_height = max(
+            min(h for h in heights if h > 0),
+            modes_height,
+        )
+
+        notebook.bind("<<NotebookTabChanged>>", self._on_advanced_tab_changed, add="+")
+        self._on_advanced_tab_changed()
+
+    def _on_advanced_tab_changed(self, event=None):
+        """Grows or shrinks the Advanced Settings notebook so its pane area fits
+        the currently selected tab's content, floored at the smallest tab's
+        height (or the Search Modes frame's height, whichever is larger) so a
+        short tab never collapses below a comfortable minimum.
+
+        Re-measures the current tab live on every switch (rather than trusting
+        the value captured at setup time) so language/theme changes that alter a
+        tab's natural height are picked up the next time the user visits it."""
+        notebook = getattr(self, "_advanced_notebook", None)
+        heights = getattr(self, "_advanced_tab_content_heights", None)
+        if notebook is None or not heights:
+            return
+        try:
+            tab_id = notebook.select()
+            current_index = notebook.index(tab_id)
+            frame = notebook.nametowidget(tab_id)
+        except (tk.TclError, KeyError):
+            return
+        if not (0 <= current_index < len(heights)):
+            return
+
+        try:
+            frame.update_idletasks()
+            target = frame.winfo_reqheight()
+        except tk.TclError:
+            target = heights[current_index]
+
+        target = max(target, self._advanced_min_content_height)
+        try:
+            notebook.configure(height=target)
+        except tk.TclError:
+            pass
+
+        # The notebook's height change alters the body's natural height, but the
+        # canvas's scrollregion is only recomputed by _sync_body_geometry. Without
+        # this call the modes/advanced row can grow past the visible area and the
+        # scrollbar won't offer any way to reach it.
+        sync = getattr(self, "_sync_body_geometry", None)
+        if sync is not None:
+            try:
+                self.update_idletasks()
+                sync()
+            except tk.TclError:
+                pass
 
     def _build_general_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
@@ -2153,6 +2374,277 @@ class WerZatSongGUI(tk.Tk):
         self.var_mb_extension = tk.StringVar(value=str(self.config_data["custom_musicbrainz_extension_value"]))
         self.var_mb_extension.trace_add("write", self._make_simple_trace())
         ttk.Entry(frame, textvariable=self.var_mb_extension, width=6).grid(row=1, column=2, sticky="w", padx=4)
+
+    def _build_audiotag_tab(self, notebook):
+        frame = ttk.Frame(notebook, padding=8)
+        notebook.add(frame, text=self._tr("audiotag_tab"))
+        self._notebook_tabs.append((notebook, frame, "audiotag_tab"))
+        frame.columnconfigure(2, weight=1)
+
+        self._add_help_button(frame, 0, "audiotag_cooldown")
+        self._add_text_widget(ttk.Label(frame, text=""), "cooldown_label").grid(row=0, column=1, sticky="w", pady=2)
+        cooldown_frame = ttk.Frame(frame)
+        cooldown_frame.grid(row=0, column=2, sticky="w", padx=4)
+        self.var_audiotag_cooldown_min = tk.StringVar(value=str(self.config_data["custom_audiotag_cooldown_min_value"]))
+        self.var_audiotag_cooldown_min.trace_add("write", self._make_simple_trace())
+        self.var_audiotag_cooldown_max = tk.StringVar(value=str(self.config_data["custom_audiotag_cooldown_max_value"]))
+        self.var_audiotag_cooldown_max.trace_add("write", self._make_simple_trace())
+        ttk.Entry(cooldown_frame, textvariable=self.var_audiotag_cooldown_min, width=6).pack(side="left", padx=2)
+        ttk.Label(cooldown_frame, text=":").pack(side="left")
+        ttk.Entry(cooldown_frame, textvariable=self.var_audiotag_cooldown_max, width=6).pack(side="left", padx=2)
+
+        self._add_help_button(frame, 1, "audiotag_rotate_after")
+        self._add_text_widget(ttk.Label(frame, text=""), "rotate_after_tracks_label").grid(row=1, column=1, sticky="w", pady=2)
+        self.var_audiotag_rotate_after = tk.StringVar(value=str(self.config_data["custom_audiotag_rotate_after_tracks_value"]))
+        self.var_audiotag_rotate_after.trace_add("write", self._make_simple_trace())
+        ttk.Entry(frame, textvariable=self.var_audiotag_rotate_after, width=6).grid(row=1, column=2, sticky="w", padx=4)
+
+        self._add_help_button(frame, 2, "audiotag_pause_seconds")
+        self._add_text_widget(ttk.Label(frame, text=""), "pause_seconds_label").grid(row=2, column=1, sticky="w", pady=2)
+        self.var_audiotag_pause_seconds = tk.StringVar(value=str(self.config_data["custom_audiotag_pause_seconds_value"]))
+        self.var_audiotag_pause_seconds.trace_add("write", self._make_simple_trace())
+        ttk.Entry(frame, textvariable=self.var_audiotag_pause_seconds, width=6).grid(row=2, column=2, sticky="w", padx=4)
+
+        self._add_help_button(frame, 3, "audiotag_min_duration")
+        self._add_text_widget(ttk.Label(frame, text=""), "min_duration_label").grid(row=3, column=1, sticky="w", pady=2)
+        self.var_audiotag_min_duration = tk.StringVar(value=str(self.config_data["custom_audiotag_min_duration_value"]))
+        self.var_audiotag_min_duration.trace_add("write", self._make_simple_trace())
+        ttk.Entry(frame, textvariable=self.var_audiotag_min_duration, width=6).grid(row=3, column=2, sticky="w", padx=4)
+
+        self.var_audiotag_multi_key = tk.BooleanVar(value=self.config_data["audiotag_use_multiple_keys"])
+        self._add_text_widget(
+            ttk.Button(frame, command=self._open_audiotag_multi_key_dialog),
+            "use_multiple_audiotag_keys_check"
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 2), padx=4)
+
+    def _ask_audiotag_key(self, initial_value="", edit_mode=False):
+        """Custom prompt dialog for adding or editing an AudioTag API key. Replaces
+        simpledialog.askstring so that (a) its Entry gets exactly the same
+        Ctrl+A/C/V/X/Y/Z shortcuts and right-click context menu as every other
+        Entry in the app, and (b) its buttons use the app's own translated
+        labels instead of simpledialog's hardcoded English "OK"/"Cancel".
+
+        Returns the entered string (stripped) when confirmed, or None when
+        cancelled / closed / left blank."""
+        result = {"value": None}
+        top = tk.Toplevel(self)
+        top.title(self._tr("edit_key_prompt_title" if edit_mode else "add_key_prompt_title"))
+        top.resizable(False, False)
+        top.transient(self)
+
+        frame = ttk.Frame(top, padding=15)
+        frame.pack(fill="both", expand=True)
+
+        self._add_text_widget(
+            ttk.Label(frame, text=""),
+            "edit_key_prompt_msg" if edit_mode else "add_key_prompt_msg"
+        ).pack(anchor="w", pady=(0, 6))
+
+        var = tk.StringVar(value=initial_value)
+        entry = ttk.Entry(frame, textvariable=var, width=50)
+        entry.pack(fill="x")
+        # The class-level fallback in _enable_entry_shortcuts only fires for
+        # widgets that already existed when it ran; this dialog's Entry is
+        # created on demand, so bind it explicitly here using the same
+        # helper that method stored on self.
+        bind_shortcuts = getattr(self, "_bind_entry_widget_shortcuts", None)
+        if bind_shortcuts is not None:
+            bind_shortcuts(entry)
+
+        def confirm(*_args):
+            result["value"] = var.get().strip()
+            top.destroy()
+
+        def cancel(*_args):
+            result["value"] = None
+            top.destroy()
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill="x", pady=(12, 0))
+        # "OK" is intentionally hardcoded: it's the same in all four languages
+        # the app supports and reads as a button, not as a translated word.
+        ttk.Button(btn_frame, text="OK", command=confirm).pack(side="right", padx=2)
+        self._add_text_widget(ttk.Button(btn_frame, command=cancel),
+                              "cancel_btn").pack(side="right", padx=2)
+
+        top.bind("<Return>", confirm)
+        top.bind("<Escape>", cancel)
+        top.protocol("WM_DELETE_WINDOW", cancel)
+
+        entry.focus_set()
+        entry.select_range(0, "end")
+        entry.icursor("end")
+
+        top.grab_set()
+        self.wait_window(top)
+        return result["value"]
+
+    def _open_audiotag_multi_key_dialog(self):
+        """Small modal window holding everything that used to be the second half of
+        the AudioTag tab: the [?] explanation, the "use multiple keys" toggle, and
+        the key list editor. Keeping it out of the notebook tab is what allows the
+        AudioTag tab to be roughly the same height as every other settings tab."""
+        top = tk.Toplevel(self)
+        top.title(self._tr("audiotag_tab"))
+        top.transient(self)
+        top.geometry("560x460")
+        top.minsize(460, 400)
+
+        frame = ttk.Frame(top, padding=10)
+        frame.pack(fill="both", expand=True)
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(3, weight=1)
+
+        check_row = ttk.Frame(frame)
+        check_row.grid(row=0, column=0, columnspan=2, sticky="w", pady=2)
+        self._add_help_button(check_row, 0, "audiotag_multi_key")
+        self._add_text_widget(
+            ttk.Checkbutton(check_row, variable=self.var_audiotag_multi_key,
+                            command=self._on_toggle_audiotag_multi_key),
+            "use_multiple_audiotag_keys_check"
+        ).grid(row=0, column=1, sticky="w")
+
+        ttk.Separator(frame, orient="horizontal").grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 6))
+
+        self._add_text_widget(ttk.Label(frame, text=""), "audiotag_keys_list_label").grid(
+            row=2, column=0, sticky="w")
+        self._add_text_widget(
+            ttk.Checkbutton(frame, variable=self._audiotag_show_keys,
+                            command=self._refresh_audiotag_keys_listbox),
+            "show_keys_check"
+        ).grid(row=2, column=1, sticky="e")
+
+        list_container = ttk.Frame(frame)
+        list_container.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(2, 4))
+        list_container.columnconfigure(0, weight=1)
+        list_container.rowconfigure(0, weight=1)
+
+        scrollbar = ttk.Scrollbar(list_container, orient="vertical")
+        self.audiotag_keys_listbox = tk.Listbox(list_container, height=8,
+                                                 yscrollcommand=scrollbar.set,
+                                                 exportselection=False)
+        scrollbar.config(command=self.audiotag_keys_listbox.yview)
+        self.audiotag_keys_listbox.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=4, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        self._add_text_widget(ttk.Button(btn_frame, command=self._add_audiotag_key),
+                              "add_key_btn").pack(side="left", padx=(0, 4))
+        self._add_text_widget(ttk.Button(btn_frame, command=self._edit_selected_audiotag_key),
+                              "edit_key_btn").pack(side="left", padx=(0, 4))
+        self._add_text_widget(ttk.Button(btn_frame, command=self._remove_selected_audiotag_key),
+                              "remove_key_btn").pack(side="left")
+
+        back_frame = ttk.Frame(frame)
+        back_frame.grid(row=5, column=0, columnspan=2, sticky="e", pady=(12, 0))
+        self._add_text_widget(ttk.Button(back_frame, command=top.destroy),
+                              "close_btn").pack(side="right")
+
+        self._refresh_audiotag_keys_listbox()
+
+        # The listbox only exists while this dialog is open. Clear the reference
+        # the moment the window is destroyed so the rest of the AudioTag helpers
+        # (_refresh_audiotag_keys_listbox, _remove_selected_audiotag_key) don't
+        # try to talk to a destroyed widget afterwards.
+        def _on_destroy(event):
+            if event.widget is top:
+                self.audiotag_keys_listbox = None
+        top.bind("<Destroy>", _on_destroy, add="+")
+
+        top.grab_set()
+
+    def _on_toggle_audiotag_multi_key(self):
+        if self.var_audiotag_multi_key.get():
+            messagebox.showwarning(self._tr("multi_key_warning_title"), self._tr("multi_key_warning_msg"))
+        self._flush_immediately()
+
+    def _refresh_audiotag_keys_listbox(self):
+        listbox = getattr(self, "audiotag_keys_listbox", None)
+        if listbox is None:
+            return
+        try:
+            if not listbox.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        show_full = self._audiotag_show_keys.get()
+        listbox.delete(0, "end")
+        for entry in self.audiotag_keys_data.get("keys", []):
+            key = entry.get("key", "")
+            if show_full:
+                display_key = key
+            else:
+                display_key = f"****{key[-4:]}" if len(key) >= 4 else "****"
+            status = entry.get("status", "ok")
+            tracks_used = entry.get("tracksUsed", 0)
+            status_label = self._tr(f"audiotag_status_{status}")
+            listbox.insert("end", f"{display_key}: {tracks_used} {self._tr('tracks_used_suffix')}, {status_label}")
+
+    def _add_audiotag_key(self):
+        new_key = self._ask_audiotag_key()
+        if not new_key:
+            return
+        keys = self.audiotag_keys_data.setdefault("keys", [])
+        if any(entry.get("key") == new_key for entry in keys):
+            return
+        keys.append({"key": new_key, "tracksUsed": 0, "status": "ok",
+                     "lastError": None, "lastUsedAt": None})
+        save_audiotag_keys(self.audiotag_keys_data)
+        self._refresh_audiotag_keys_listbox()
+
+    def _edit_selected_audiotag_key(self):
+        listbox = getattr(self, "audiotag_keys_listbox", None)
+        if listbox is None:
+            return
+        try:
+            if not listbox.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        selection = listbox.curselection()
+        if not selection:
+            return
+        keys = self.audiotag_keys_data.get("keys", [])
+        index = selection[0]
+        if not (0 <= index < len(keys)):
+            return
+        entry_data = keys[index]
+        old_key = entry_data.get("key", "")
+        new_key = self._ask_audiotag_key(initial_value=old_key, edit_mode=True)
+        if new_key is None or not new_key or new_key == old_key:
+            return
+        if any(other is not entry_data and other.get("key") == new_key for other in keys):
+            return
+        entry_data["key"] = new_key
+        entry_data["tracksUsed"] = 0
+        entry_data["status"] = "ok"
+        entry_data["lastError"] = None
+        entry_data["lastUsedAt"] = None
+        save_audiotag_keys(self.audiotag_keys_data)
+        self._refresh_audiotag_keys_listbox()
+        listbox.selection_set(index)
+
+    def _remove_selected_audiotag_key(self):
+        listbox = getattr(self, "audiotag_keys_listbox", None)
+        if listbox is None:
+            return
+        try:
+            if not listbox.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        selection = listbox.curselection()
+        if not selection:
+            return
+        keys = self.audiotag_keys_data.get("keys", [])
+        index = selection[0]
+        if 0 <= index < len(keys):
+            del keys[index]
+            if self.audiotag_keys_data.get("activeIndex", 0) >= len(keys):
+                self.audiotag_keys_data["activeIndex"] = 0
+            save_audiotag_keys(self.audiotag_keys_data)
+            self._refresh_audiotag_keys_listbox()
 
     def _build_discord_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
@@ -2608,6 +3100,7 @@ class WerZatSongGUI(tk.Tk):
             self.active_process = None
 
         self.after(0, self._reload_env_from_disk)
+        self.after(0, self._reload_audiotag_keys_from_disk)
         return process.returncode
 
     # ------------------------------------------------------------------
@@ -2729,6 +3222,22 @@ class WerZatSongGUI(tk.Tk):
         c["custom_musicbrainz_extension_value"] = self._parse_int_field(
             self.var_mb_extension.get(), MUSICBRAINZ_EXTENSION_MIN, MUSICBRAINZ_EXTENSION_MAX,
             MUSICBRAINZ_EXTENSION_DEFAULT)
+        c["audiotag_use_multiple_keys"] = bool(self.var_audiotag_multi_key.get())
+        c["custom_audiotag_cooldown_min_value"] = self._parse_int_field(
+            self.var_audiotag_cooldown_min.get(), AUDIOTAG_COOLDOWN_MIN, AUDIOTAG_COOLDOWN_MAX,
+            AUDIOTAG_COOLDOWN_MIN_DEFAULT)
+        c["custom_audiotag_cooldown_max_value"] = self._parse_int_field(
+            self.var_audiotag_cooldown_max.get(), AUDIOTAG_COOLDOWN_MIN, AUDIOTAG_COOLDOWN_MAX,
+            AUDIOTAG_COOLDOWN_MAX_DEFAULT)
+        c["custom_audiotag_rotate_after_tracks_value"] = self._parse_int_field(
+            self.var_audiotag_rotate_after.get(), AUDIOTAG_ROTATE_AFTER_MIN, AUDIOTAG_ROTATE_AFTER_MAX,
+            AUDIOTAG_ROTATE_AFTER_DEFAULT)
+        c["custom_audiotag_pause_seconds_value"] = self._parse_int_field(
+            self.var_audiotag_pause_seconds.get(), AUDIOTAG_PAUSE_SECONDS_MIN, AUDIOTAG_PAUSE_SECONDS_MAX,
+            AUDIOTAG_PAUSE_SECONDS_DEFAULT)
+        c["custom_audiotag_min_duration_value"] = self._parse_int_field(
+            self.var_audiotag_min_duration.get(), AUDIOTAG_MIN_DURATION_MIN, AUDIOTAG_MIN_DURATION_MAX,
+            AUDIOTAG_MIN_DURATION_DEFAULT)
         c["theme_mode"] = self.var_theme_mode.get()
         c["language"] = self.var_language.get()
         c["create_pklz_hash_tables_on_load_val"] = bool(self.var_create_pklz_ht.get())
@@ -2744,7 +3253,7 @@ class WerZatSongGUI(tk.Tk):
 
     def _save_config_to_disk(self):
         if self._suppress_config_saves:
-            # During orchestration we may temporarily hold runtime-only state (the additional-
+            # During orchestration temporarily a runtime-only state could be held (the additional-
             # modes toggles, the PKLZ folder override) in config_data that must never land in
             # config.json. Skipping the write here is intentional; _run_pipeline's finally
             # block restores the real values before this flag is ever cleared.
@@ -2782,7 +3291,7 @@ class WerZatSongGUI(tk.Tk):
     def _load_processed_songs(self, mode):
         """Returns (processed_set, input_dir_mismatch_bool) for the given mode ("quick" or
         "long"). If the JSON's stored input_dir differs from the currently configured one, the
-        processed list is ignored (an empty set is returned instead), so we never treat a song
+        processed list is ignored (an empty set is returned instead), so a song should never be treated
         as already scanned just because it happens to share a relative path with something
         scanned under a different input folder. A [WARNING]-tagged line is logged via _log()
         every single time this is called on a mismatched file, not just once per session: the
@@ -3010,6 +3519,13 @@ class WerZatSongGUI(tk.Tk):
                 if self.show_state.get(key) and key in self.env_vars:
                     self._set_var_silently(self.env_vars[key], self.env_data.get(key, ""))
 
+    def _reload_audiotag_keys_from_disk(self):
+        """Re-reads audiotag_keys.json after a scan, so per-key usage counts/status that the
+        Node side just updated (see assets/utils/audiotagKeys.js) show up in the key list
+        editor without needing to reopen Advanced Settings."""
+        self.audiotag_keys_data = load_audiotag_keys()
+        self._refresh_audiotag_keys_listbox()
+
     def _toggle_env_show(self, key):
         self.show_state[key] = not self.show_state.get(key, False)
         if self.show_state[key]:
@@ -3019,6 +3535,12 @@ class WerZatSongGUI(tk.Tk):
         else:
             self.env_show_frames[key].grid_remove()
             self.env_show_buttons[key].grid()
+        sync = getattr(self, "_sync_body_geometry", None)
+        if sync is not None:
+            try:
+                sync()
+            except tk.TclError:
+                pass
 
     # ------------------------------------------------------------------
     # Directories
@@ -4500,8 +5022,8 @@ class WerZatSongGUI(tk.Tk):
             #   1) Loading hash_table.py as a top-level module (rather than as the package
             #      submodule "audfprint.hash_table") matches how audfprint.py itself does it.
             #   2) The .pklz files on disk were serialized by a script that ran that way, so
-            #      pickle stores the class as "hash_table.HashTable" (bare). If we only
-            #      registered "audfprint.hash_table", unpickling would fail with
+            #      pickle stores the class as "hash_table.HashTable" (bare). If only
+            #      registered "audfprint.hash_table" was registered, unpickling would fail with
             #      "No module named 'hash_table'" even though the module is physically present.
             audfprint_libs_dir = os.path.join(ASSETS_FOLDER, "libs", "audfprint")
             if audfprint_libs_dir not in sys.path:
@@ -5577,7 +6099,7 @@ class WerZatSongGUI(tk.Tk):
         safety net for any Entry created later.
 
         Must be called AFTER every Entry in the UI has been created (see
-        _build_full_ui), because we walk the widget tree once."""
+        _build_full_ui), because the widget tree is walked once."""
         if getattr(self, "_entry_undo_installed", False):
             return
         self._entry_undo_installed = True
@@ -5617,7 +6139,7 @@ class WerZatSongGUI(tk.Tk):
                 return False
 
         def _record_change(entry):
-            """Compare the entry's current content to what we last observed. If it
+            """Compare the entry's current content to what was last observed. If it
             changed, and we're outside the debounce window, push the *previous*
             value onto the undo stack. Called from <KeyRelease> (fires after the
             entry's built-in insertion handler, so `entry.get()` is up-to-date)
@@ -5640,7 +6162,7 @@ class WerZatSongGUI(tk.Tk):
                 return  # no actual text change (modifier key, arrow, click, etc.)
             now = time.time()
             if now - state["last_time"] >= UNDO_DEBOUNCE_SECONDS:
-                # Start of a fresh burst: push the value we were showing *before*
+                # Start of a fresh burst: push the value that was shown *before*
                 # this burst began.
                 if not state["undo"] or state["undo"][-1] != last:
                     state["undo"].append(last)
@@ -5688,7 +6210,7 @@ class WerZatSongGUI(tk.Tk):
                     _write_value(entry, previous)
                     return
                 # Only now, after a successful mutation, is it safe to consume
-                # the history entry and record where we came from.
+                # the history entry and record where it came from.
                 state["undo"].pop()
                 if not state["redo"] or state["redo"][-1] != previous:
                     state["redo"].append(previous)
@@ -5773,12 +6295,10 @@ class WerZatSongGUI(tk.Tk):
                 menu.grab_release()
             return "break"
 
-        # -- per-widget bindings (primary path) -----------------------------
-        bound = 0
-        for widget in self._walk_widgets(self):
-            if widget.winfo_class() not in ("Entry", "TEntry"):
-                continue
-            bound += 1
+        # -- per-widget binding helper (kept on self so dialogs created later,
+        # such as _ask_audiotag_key, can apply the same shortcuts to their own
+        # freshly-created Entry without waiting for the class fallback to fire) --
+        def bind_entry_widget(widget):
             widget.bind("<Button-3>", show_context_menu, add="+")
             widget.bind("<Control-a>", on_select_all, add="+")
             widget.bind("<Control-A>", on_select_all, add="+")
@@ -5788,15 +6308,23 @@ class WerZatSongGUI(tk.Tk):
             widget.bind("<Control-Y>", on_redo, add="+")
             # <KeyRelease> (not <KeyPress>): the entry's own insertion handler
             # runs on KeyPress, so at KeyRelease time the new value is already
-            # in the widget and we can compare it to the previous observation.
+            # in the widget and can be compared to the previous observation.
             widget.bind("<KeyRelease>", on_key_release, add="+")
             widget.bind("<FocusIn>", on_focus_in, add="+")
-            # Seed the baseline right now, so the very first keystroke after
-            # launch (before any FocusIn has fired) is still undoable.
+            # Seeds the baseline right now, so the very first keystroke after
+            # creation (before any FocusIn has fired) is still undoable.
             try:
                 get_state(widget)["last_value"] = widget.get()
             except tk.TclError:
                 pass
+
+        self._bind_entry_widget_shortcuts = bind_entry_widget
+
+        # -- per-widget bindings (primary path) -----------------------------
+        for widget in self._walk_widgets(self):
+            if widget.winfo_class() not in ("Entry", "TEntry"):
+                continue
+            bind_entry_widget(widget)
 
         # -- class-level fallback (for any Entry created later) -------------
         for cls in ("TEntry", "Entry"):

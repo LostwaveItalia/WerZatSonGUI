@@ -292,6 +292,8 @@ This key is required to use the **AudioTag** search mode.
 3. Click **Create new API key**, then copy it
 4. Paste this key when WerZatSonGUI asks for it during setup (or afterwards, in the **API Keys & Webhook (.env)** section of the main interface)
 
+> **WARNING: A free AudioTag account is limited to roughly 1,000 identification requests per month.** Against real unknown tracks that budget can run out after as few as 100-200 files, so AudioTag alone isn't suitable for scanning thousands of tracks. WerZatSonGUI adds a randomized cooldown between requests, a periodic safety pause, and optional rotation across several free accounts' keys to use this budget more carefully; see the **[*AudioTag tab*](#audiotag-tab)** in Advanced Settings below. None of this removes AudioTag's own limits, so please stay mindful of their service either way.
+
 ### How to Get an AcoustID (MusicBrainz) API Key
 
 This key is required to use the **MusicBrainz (AcoustID)** search mode.
@@ -358,7 +360,7 @@ Four checkboxes to enable or disable **MusicBrainz (AcoustID)**, **AudioTag**, *
 
 ### Advanced Settings
 
-Split into eight tabs so related settings are grouped together. Each individual setting has a small **[?]** button to its left with a short explanation, and this section also summarizes what each one does. This whole panel is greyed out while a scan is running.
+Split into nine tabs so related settings are grouped together. Each individual setting has a small **[?]** button to its left with a short explanation, and this section also summarizes what each one does. This whole panel is greyed out while a scan is running.
 
 #### General tab
 
@@ -385,6 +387,16 @@ Picking specific PKLZ subfolders is now done through the **Select PKLZ Folders..
 
 - **Set duration range (in seconds) to:** restricts MusicBrainz matches to songs whose duration falls between the two values you enter. Each value must be between `30` and `600`; anything outside that range is reset back to the defaults (`30`/`600`).
 - **Set initial extension (in seconds) to:** helps MusicBrainz find a match when the beginning of your audio file is cut off or delayed, by extending the analyzed window by this many seconds. Must be between `1` and `25`; anything outside that range is reset back to the default (`25`).
+
+#### AudioTag tab
+
+See the warning under [*"How to Get an AudioTag API Key"*](#how-to-get-an-audiotag-api-key) above for why these settings exist: a free AudioTag account's ~1,000 requests/month budget disappears fast against real unknown tracks, so these dials exist to pace requests and, optionally, spread them across several accounts.
+
+- **Cooldown between requests (seconds), min:max:** before every AudioTag request, WerZatSonGUI waits a random number of seconds in this range (default `10`-`30`), so requests aren't sent back-to-back.
+- **Pause (and rotate keys) after this many tracks:** a periodic safety checkpoint (default `100` tracks). Note this counts **tracks**, not raw requests: a single track's lookup already involves one identification request plus several free status checks. At this checkpoint WerZatSonGUI always takes the pause below, and, if **Use multiple AudioTag API keys** is on and another usable key is available, also switches to it.
+- **Pause duration at that checkpoint (seconds):** how long that periodic pause lasts (default `300` = 5 minutes). Applies whether or not multiple keys are configured.
+- **Minimum clip duration sent to AudioTag (seconds):** AudioTag's server rejects very short clips in practice. Anything shorter than this (default `15`) is looped &mdash; repeating its own audio, not padded with silence &mdash; up to this length before being sent, so short clips still get a chance at identification instead of being silently skipped.
+- **Use multiple AudioTag API keys:** rotates AudioTag searches through a list of keys (each from a separate free account) instead of the single key in **API Keys & Webhook (.env)**. Turning this on shows a warning: using several keys still means hitting AudioTag's server more overall, so please stay mindful of their service. Keys are managed with the **Add key...**/**Remove selected** buttons below the checkbox and are stored in `assets\audiotag_keys.json`; WerZatSonGUI automatically marks a key exhausted or invalid based on the server's own responses and moves on to the next usable one, and the list shows each key's usage count and status (masked to its last 4 characters).
 
 #### Discord tab
 
@@ -420,7 +432,7 @@ Both the **Add PKLZ Files...** and **Add Audio Files...** dialogs have a **Move 
 ## Search Modes Explained
 
 - **MusicBrainz (AcoustID):** computes an acoustic fingerprint of the file (via `fpcalc`) and looks it up against the [AcoustID](https://acoustid.org)/MusicBrainz database, keeping only results above a minimum confidence score. Needs an **AcoustID API key**.
-- **AudioTag:** sends the file to the [AudioTag.info](https://audiotag.info) API and reports back whatever match it finds. Needs an **AudioTag API key**.
+- **AudioTag:** sends the file to the [AudioTag.info](https://audiotag.info) API and reports back whatever match it finds. Needs an **AudioTag API key**. See the [*AudioTag tab*](#audiotag-tab) above for the cooldown/pause/multi-key settings that pace requests within AudioTag's free-tier limits, and the warning under [*"How to Get an AudioTag API Key"*](#how-to-get-an-audiotag-api-key). Every AudioTag call this mode makes (match or not) is logged in full to `_audiotag_activity.jsonl` and `_audiotag_debug.jsonl` inside that run's results folder, so failures are easy to diagnose.
 - **Shazam:** identifies the file the same way the Shazam app does, using the `shazamio` Python library. Needs no key, but is deliberately rate-limited (a short pause between files) to avoid tripping Shazam's own abuse detection.
 - **Audfprint:** matches the file against your own local `.pklz` fingerprint database(s) instead of an online service (see [*Setting Up the Audfprint Database*](#setting-up-the-audfprint-database)). The only mode that works entirely offline once your databases are downloaded, and the main one that benefits from **Long Mode**'s tempo/pitch variations, since it's sensitive enough to those.
 
@@ -473,13 +485,13 @@ Whenever a scan finds a likely match, two things happen:
 1. A notification (and, for most modes, a small results `.txt` file with the raw match data) is posted to your **Discord Webhook**.
 2. At the end of processing each batch/file, WerZatSonGUI copies every results file generated during it into a new, timestamped subfolder of your **Log Directory** (see [*Default Directories*](#default-directories) above and [*Log Format*](#log-format) below), and prints exactly where in the console (`[SUCCESS]: Logs for '...' saved in '...'`) so you never have to go hunting for it manually.
 
-If a batch/file produces no matches at all in any enabled mode, no log subfolder is created for it. Only genuine matches ever show up under your Log Directory.
+If a batch/file produces no matches at all in any enabled mode, no log subfolder is created for it, with one exception: whenever **AudioTag** mode runs, its always-on `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` logs (see [*Log Format*](#log-format) below) are still written to that run's Log Directory subfolder even with zero matches, since their whole purpose is to make every AudioTag call traceable, not just successful ones. Every other mode still only shows up under your Log Directory for genuine matches.
 
 ## Log Format
 
 The exact format depends on the search mode:
 
-- **MusicBrainz, Audiotag and Shazam** logs are simple: one result per line (MusicBrainz), or the raw match data as-is (Audiotag/Shazam). Nothing fancier is needed since each of these modes returns at most a small number of already-scored candidates.
+- **MusicBrainz, Audiotag and Shazam** logs are simple: one result per line (MusicBrainz), or the raw match data as-is (Audiotag/Shazam). Nothing fancier is needed since each of these modes returns at most a small number of already-scored candidates. **AudioTag** additionally always writes `_audiotag_activity.jsonl` (one line per track processed, match or not, with its outcome) and `_audiotag_debug.jsonl` (the raw request/response for every individual AudioTag API call) into the same run's results folder, regardless of whether any match was found &mdash; unlike the other logs on this page, these two are written even for a run with zero matches, so a failed or skipped AudioTag search is always traceable. API keys are never written to these logs in full, only their last 4 characters.
 - **Audfprint** logs are richer, since a single search can return many candidates that need to be judged against each other. Each one starts with a short **LEGEND** block explaining the format, followed by every candidate match, listed from most to least likely, formatted as two lines each:
 	```
     [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s

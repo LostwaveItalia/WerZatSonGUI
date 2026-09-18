@@ -290,6 +290,8 @@ Cette clé est requise pour utiliser le mode de recherche **AudioTag**.
 3. Cliquez sur **Créer une nouvelle clé API**, puis copiez-la.
 4. Collez cette clé lorsque WerZatSonGUI vous la demande pendant la configuration (ou après, dans la section **Clés API et Webhook (.env)** de l'interface principale).
 
+> **AVERTISSEMENT: un compte AudioTag gratuit est limité à environ 1 000 requêtes d'identification par mois.** Face à de vraies pistes inconnues, ce budget peut s'épuiser en aussi peu que 100 à 200 fichiers, donc AudioTag seul ne convient pas pour analyser des milliers de pistes. WerZatSonGUI ajoute un délai aléatoire entre les requêtes, une pause de sécurité périodique, et une rotation optionnelle entre les clés de plusieurs comptes gratuits pour utiliser ce budget plus prudemment; voir l'**onglet AudioTag** dans les Paramètres avancés ci-dessous. Rien de tout cela ne supprime les limites propres à AudioTag, alors restez tout de même attentif à leur service.
+
 ### Comment obtenir une clé API AcoustID (MusicBrainz)
 
 Cette clé est requise pour utiliser le mode de recherche **MusicBrainz (AcoustID)**.
@@ -356,7 +358,7 @@ Quatre cases à cocher pour activer ou désactiver **MusicBrainz (AcoustID)**, *
 
 ### Paramètres avancés
 
-Divisé en huit onglets pour regrouper les paramètres connexes. Chaque paramètre individuel a un petit bouton **[?]** à sa gauche avec une courte explication, et cette section résume également ce que chacun fait. Tout ce panneau est grisé pendant qu'une analyse est en cours.
+Divisé en neuf onglets pour regrouper les paramètres connexes. Chaque paramètre individuel a un petit bouton **[?]** à sa gauche avec une courte explication, et cette section résume également ce que chacun fait. Tout ce panneau est grisé pendant qu'une analyse est en cours.
 
 #### Onglet Général
 
@@ -383,6 +385,16 @@ Le choix de sous-dossiers PKLZ spécifiques se fait désormais via le bouton **S
 
 - **Définir la plage de durée (en secondes) sur:** restreint les correspondances MusicBrainz aux chansons dont la durée se situe entre les deux valeurs que vous saisissez. Chaque valeur doit être comprise entre `30` et `600`; toute valeur en dehors de cette plage est réinitialisée aux valeurs par défaut (`30`/`600`).
 - **Définir la durée initiale (en secondes) sur:** aide MusicBrainz à trouver une correspondance lorsque le début de votre fichier audio est tronqué ou retardé, en étendant la fenêtre analysée de ce nombre de secondes. Doit être compris entre `1` et `25`; toute valeur en dehors de cette plage est réinitialisée à la valeur par défaut (`25`).
+
+#### Onglet AudioTag
+
+Voir l'avertissement sous *"Comment obtenir une clé API AudioTag"* ci-dessus pour comprendre pourquoi ces paramètres existent: le budget d'environ 1 000 requêtes/mois d'un compte AudioTag gratuit s'épuise vite face à de vraies pistes inconnues, donc ces réglages existent pour cadencer les requêtes et, optionnellement, les répartir entre plusieurs comptes.
+
+- **Délai entre les requêtes (secondes), min:max:** avant chaque requête AudioTag, WerZatSonGUI attend un nombre aléatoire de secondes dans cette plage (par défaut `10`-`30`), afin que les requêtes ne soient pas envoyées coup sur coup.
+- **Pause (et rotation des clés) après ce nombre de pistes:** un point de contrôle de sécurité périodique (par défaut `100` pistes). Notez que cela compte des **pistes**, pas des requêtes brutes: la recherche d'une seule piste implique déjà une requête d'identification plus plusieurs vérifications de statut gratuites. À ce point de contrôle, WerZatSonGUI prend toujours la pause ci-dessous et, si **Utiliser plusieurs clés API AudioTag** est activé et qu'une autre clé utilisable est disponible, passe également à celle-ci.
+- **Durée de la pause à ce point de contrôle (secondes):** la durée de cette pause périodique (par défaut `300` = 5 minutes). S'applique que plusieurs clés soient configurées ou non.
+- **Durée minimale du clip envoyé à AudioTag (secondes):** le serveur d'AudioTag rejette en pratique les extraits très courts. Tout ce qui est plus court que cette valeur (par défaut `15`) est mis en boucle — en répétant son propre audio, sans ajout de silence — jusqu'à atteindre cette longueur avant l'envoi, afin que les extraits courts aient quand même une chance d'être identifiés au lieu d'être silencieusement ignorés.
+- **Utiliser plusieurs clés API AudioTag:** fait tourner les recherches AudioTag parmi une liste de clés (chacune provenant d'un compte gratuit distinct) au lieu de la clé unique de **Clés API et Webhook (.env)**. Activer cette option affiche un avertissement: utiliser plusieurs clés signifie quand même solliciter davantage le serveur AudioTag, alors restez attentif à leur service. Les clés se gèrent avec les boutons **Ajouter une clé...**/**Supprimer la sélection** sous la case à cocher et sont stockées dans `assets\audiotag_keys.json`; WerZatSonGUI marque automatiquement une clé comme épuisée ou invalide en fonction des réponses du serveur lui-même et passe à la suivante utilisable, et la liste affiche le nombre d'utilisations et l'état de chaque clé (masquée jusqu'à ses 4 derniers caractères).
 
 #### Onglet Discord
 
@@ -418,7 +430,7 @@ Les fenêtres **Add PKLZ Files...** et **Add Audio Files...** ont toutes deux un
 ## Explication des modes de recherche
 
 - **MusicBrainz (AcoustID):** calcule une empreinte acoustique du fichier (via `fpcalc`) et la recherche dans la base de données [AcoustID](https://acoustid.org)/MusicBrainz, en ne gardant que les résultats au-dessus d'un score de confiance minimal. Nécessite une **clé API AcoustID**.
-- **AudioTag:** envoie le fichier à l'API [AudioTag.info](https://audiotag.info) et rapporte la correspondance trouvée. Nécessite une **clé API AudioTag**.
+- **AudioTag:** envoie le fichier à l'API [AudioTag.info](https://audiotag.info) et rapporte la correspondance trouvée. Nécessite une **clé API AudioTag**. Voir l'**onglet AudioTag** ci-dessus pour les paramètres de délai/pause/clés multiples qui cadencent les requêtes dans les limites de l'offre gratuite d'AudioTag, ainsi que l'avertissement sous *"Comment obtenir une clé API AudioTag"*. Chaque appel AudioTag effectué par ce mode (correspondance ou non) est intégralement journalisé dans `_audiotag_activity.jsonl` et `_audiotag_debug.jsonl` dans le dossier de résultats de cette exécution, afin que les échecs soient faciles à diagnostiquer.
 - **Shazam:** identifie le fichier de la même manière que l'application Shazam, en utilisant la bibliothèque Python `shazamio`. Ne nécessite pas de clé, mais est délibérément limité en débit (une courte pause entre les fichiers) pour éviter de déclencher la détection d'abus de Shazam.
 - **Audfprint:** compare le fichier à vos propres bases de données d'empreintes `.pklz` locales au lieu d'un service en ligne (voir [*Configuration de la base de données Audfprint*](#configuration-de-la-base-de-données-audfprint)). Le seul mode qui fonctionne entièrement hors ligne une fois vos bases de données téléchargées, et le principal qui bénéficie des variations de tempo/hauteur du **mode Long**, car il y est suffisamment sensible.
 
@@ -471,13 +483,13 @@ Chaque fois qu'une analyse trouve une correspondance probable, deux choses se pr
 1. Une notification (et, pour la plupart des modes, un petit fichier de résultats `.txt` avec les données brutes de correspondance) est publiée sur votre **Webhook Discord**.
 2. À la fin du traitement de chaque lot/fichier, WerZatSonGUI copie tous les fichiers de résultats générés pendant celui-ci dans un nouveau sous-dossier horodaté de votre **répertoire des journaux** (voir [*Répertoires par défaut*](#répertoires-par-défaut) ci-dessus et [*Format des journaux*](#format-des-journaux) ci-dessous), et affiche exactement où dans la console (`[RÉUSSI]: Journaux pour '...' enregistrés dans '...'`) afin que vous n'ayez jamais à chercher manuellement.
 
-Si un lot/fichier ne produit aucune correspondance dans aucun mode activé, aucun sous-dossier de journal n'est créé pour lui. Seules les correspondances réelles apparaissent dans votre répertoire de journaux.
+Si un lot/fichier ne produit aucune correspondance dans aucun mode activé, aucun sous-dossier de journal n'est créé pour lui, à une exception près: chaque fois que le mode **AudioTag** s'exécute, ses journaux toujours actifs `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` (voir [*Format des journaux*](#format-des-journaux) ci-dessous) sont quand même écrits dans le sous-dossier du répertoire des journaux de cette exécution, même sans aucune correspondance, car leur seul but est de rendre chaque appel AudioTag traçable, pas seulement les correspondances réussies. Tous les autres modes n'apparaissent toujours dans votre répertoire de journaux qu'en cas de correspondances réelles.
 
 ## Format des journaux
 
 Le format exact dépend du mode de recherche:
 
-- Les journaux **MusicBrainz, Audiotag et Shazam** sont simples: un résultat par ligne (MusicBrainz), ou les données brutes de correspondance telles quelles (Audiotag/Shazam). Rien de plus sophistiqué n'est nécessaire car chacun de ces modes renvoie au plus un petit nombre de candidats déjà notés.
+- Les journaux **MusicBrainz, Audiotag et Shazam** sont simples: un résultat par ligne (MusicBrainz), ou les données brutes de correspondance telles quelles (Audiotag/Shazam). Rien de plus sophistiqué n'est nécessaire car chacun de ces modes renvoie au plus un petit nombre de candidats déjà notés. **AudioTag** écrit en plus toujours `_audiotag_activity.jsonl` (une ligne par piste traitée, correspondance ou non, avec son résultat) et `_audiotag_debug.jsonl` (la requête/réponse brute de chaque appel individuel à l'API AudioTag) dans le dossier de résultats de la même exécution, que des correspondances aient été trouvées ou non — contrairement aux autres journaux de cette page, ces deux fichiers sont écrits même pour une exécution sans aucune correspondance, afin qu'une recherche AudioTag échouée ou ignorée reste toujours traçable. Les clés API ne sont jamais écrites en entier dans ces journaux, seulement leurs 4 derniers caractères.
 - Les journaux **Audfprint** sont plus riches, car une seule recherche peut renvoyer de nombreux candidats qui doivent être comparés entre eux. Chacun commence par un court bloc **LEGEND** expliquant le format, suivi de chaque correspondance candidate, classée du plus au moins probable, formatée en deux lignes chacune:
 	```
     [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s

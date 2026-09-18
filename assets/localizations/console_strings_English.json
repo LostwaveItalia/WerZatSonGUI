@@ -76,5 +76,20 @@
 	"acoustid_key_invalid": "The AcoustID API key you entered is invalid",
 	"webhook_missing_warning": "Discord webhook is not set in .env file. Please provide a valid Discord webhook URL",
 	"webhook_prompt": "Paste your Discord webhook URL here: ",
-	"webhook_invalid": "The Discord webhook URL you entered is invalid"
+	"webhook_invalid": "The Discord webhook URL you entered is invalid",
+	"audiotag_no_keys_configured": "AudioTag multi-key mode is enabled, but no usable API key is configured in audiotag_keys.json. Add at least one key from the AudioTag tab in Advanced Settings",
+	"audiotag_no_keys_configured_runtime": "No usable AudioTag key is configured; skipping AudioTag for the rest of this run",
+	"audiotag_no_keys_available_skipping": "No usable AudioTag key remains; skipping AudioTag search for \"{file}\"",
+	"audiotag_checkpoint_pause": "AudioTag checkpoint reached ({count} tracks on this key): pausing for {seconds}s before continuing, to stay well within AudioTag's rate limits",
+	"audiotag_key_rotated": "Now using AudioTag key ending in {suffix}",
+	"audiotag_key_marked_exhausted": "AudioTag key ending in {suffix} has run out of credit and has been marked exhausted",
+	"audiotag_key_marked_invalid": "AudioTag key ending in {suffix} was rejected by the server and has been marked invalid",
+	"audiotag_extending_short_clip": "\"{file}\" is only {duration}s long; looping it up to {target}s before sending it to AudioTag",
+	"audiotag_duration_probe_failed": "Could not determine the duration of \"{file}\" ({error}). Proceeding with the original file as-is",
+	"audiotag_stat_summary": "AudioTag account status for the active key: {balance} credit balance, {freeSecRemainder}s free identification budget remaining, {queries} total queries made",
+	"audiotag_error_too_short": "AudioTag rejected \"{file}\" as too short ({error}). Try raising the Minimum Clip Duration setting",
+	"audiotag_error_bad_audio": "AudioTag could not read \"{file}\": {error}",
+	"audiotag_error_server_unavailable": "AudioTag server issue while searching \"{file}\": {error}. This is usually temporary",
+	"audiotag_error_invalid_token": "AudioTag lookup for \"{file}\" failed: the request token expired before a result was ready ({error})",
+	"audiotag_error_unknown": "AudioTag search for \"{file}\" failed with an unrecognized error: {error}"
 }

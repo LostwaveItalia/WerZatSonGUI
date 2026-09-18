@@ -22,6 +22,11 @@ const consts = {
     AFPTS_FILE: join(ROOT_PATH, 'temp', '_afpts.txt'),
     AUDFPRINT_PROGRAM: join(ROOT_PATH, 'libs', 'audfprint', 'audfprint.py'),
     AUDFPRINT_SCRIPT: join(ROOT_PATH, 'scripts', 'audfprint.js'),
+    AUDIOTAG_KEYS_FILE: join(ROOT_PATH, 'audiotag_keys.json'),
+    AUDIOTAG_KEYS_EXAMPLE_FILE: join(ROOT_PATH, 'audiotag_keys.example.json'),
+    // Same folder WerZatSonGUI.pyw's own CONFIG_FILE points at (one level up from assets/),
+    // mirroring how utils/i18n.js already locates it to read the active language
+    ROOT_CONFIG_FILE: join(ROOT_PATH, '..', 'config.json'),
     ENV_FILE: join(ROOT_PATH, '.env'),
     EXAMPLE_ENV_FILE: join(ROOT_PATH, '.env.example'),
     FILLER_FILE: join(ROOT_PATH, 'resources', 'filler.mp3'),

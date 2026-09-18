@@ -7,14 +7,15 @@
 const dotenv = require('dotenv')
 const { execFile, spawn } = require('node:child_process')
 const crypto = require('node:crypto')
-const { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } = require('node:fs')
+const { appendFileSync, copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } = require('node:fs')
 const { availableParallelism } = require('node:os')
 const { basename, extname, join } = require('node:path')
 const readline = require('node:readline')
 const { promisify } = require('node:util')
 const { hideBin } = require('yargs/helpers')
 const yargs = require('yargs/yargs')
-const { searchWithAudiotag } = require('./scripts/audiotag')
+const { getAudiotagStat, searchWithAudiotag } = require('./scripts/audiotag')
+const { createAudiotagKeyManager, KeyStatus, maskKey, loadSettings: loadAudiotagSettings } = require('./utils/audiotagKeys')
 const consts = require('./utils/consts')
 const { generateUnique, sleep, trimExtension } = require('./utils/helpers')
 const { t } = require('./utils/i18n')
@@ -147,6 +148,68 @@ function formatSeconds(ms){
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+}
+
+function randomInRange(min, max){
+    if(max <= min)
+        return Math.max(0, min)
+    return min + Math.random() * (max - min)
+}
+
+/* ---------------------------------------------------------------------------
+ * AudioTag helpers: duration probing, short-clip loop-extension, activity log
+ * ------------------------------------------------------------------------ */
+
+function parseFfmpegDuration(stderrText){
+    const match = (stderrText || '').match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
+    if(!match)
+        return null
+    const [, hours, minutes, seconds] = match
+    return (Number(hours) * 3600) + (Number(minutes) * 60) + Number(seconds)
+}
+
+async function probeDuration(ffmpegCommand, file){
+    try {
+        const { stderr } = await runTool(ffmpegCommand, ['-hide_banner', '-i', file, '-f', 'null', '-'])
+        return parseFfmpegDuration(stderr)
+    }
+    catch(error){
+        // ffmpeg still writes "Duration: ..." to stderr even when the overall command exits
+        // non-zero for an unrelated reason, and that stderr is attached to the rejection here
+        return parseFfmpegDuration(error?.stderr)
+    }
+}
+
+// Loops the file's own audio (rather than padding it with silence) until it reaches
+// targetSeconds, so AudioTag receives real repeated content instead of rejecting the clip
+// for being shorter than its practical minimum duration.
+async function loopExtendForAudiotag(ffmpegCommand, file, targetSeconds){
+    const destPath = join(consts.TEMP_FOLDER, `${trimExtension(basename(file))}-audiotag-ext.mp3`)
+    await runTool(ffmpegCommand, [
+        '-stream_loop', '-1',
+        '-i', file,
+        '-t', String(targetSeconds),
+        '-c:a', 'libmp3lame', '-q:a', '2', '-ar', '44100',
+        '-y', destPath
+    ])
+    return destPath
+}
+
+function ensureResultsFolder(){
+    if(!existsSync(RESULTS_FOLDER))
+        mkdirSync(RESULTS_FOLDER)
+}
+
+function audiotagDebugLogPath(){
+    return join(RESULTS_FOLDER, '_audiotag_debug.jsonl')
+}
+
+// Always-on per-track log covering every AudioTag call this run makes, match or not - separate
+// from createResultsLog, which only ever writes a file when a match was actually found.
+function appendAudiotagActivity(entry){
+    ensureResultsFolder()
+    const activityFile = join(RESULTS_FOLDER, '_audiotag_activity.jsonl')
+    appendFileSync(activityFile, `${JSON.stringify({ timestamp: new Date().toISOString(), ...entry })}\n`)
 }
 
 /* ---------------------------------------------------------------------------
@@ -711,10 +774,85 @@ async function musicbrainz(env, file, extension, duration){
     }
 }
 
-async function audiotag(env, file){
+const AUDIOTAG_ERROR_MESSAGE_KEYS = {
+    TOO_SHORT: 'audiotag_error_too_short',
+    BAD_AUDIO: 'audiotag_error_bad_audio',
+    SERVER_UNAVAILABLE: 'audiotag_error_server_unavailable',
+    INTERNAL_ERROR: 'audiotag_error_server_unavailable',
+    INVALID_TOKEN: 'audiotag_error_invalid_token',
+    BAD_REQUEST: 'audiotag_error_unknown',
+    NETWORK_ERROR: 'audiotag_error_unknown',
+    UNKNOWN: 'audiotag_error_unknown'
+}
+
+async function audiotag(env, file, keyManager){
     const fileBasename = basename(file)
+    if(!keyManager || keyManager.disabledForRun){
+        empty(t('audiotag_no_keys_available_skipping', { file: fileBasename }))
+        return
+    }
+
+    let activeEntry = keyManager.getActiveKey()
+    if(!activeEntry){
+        keyManager.disabledForRun = true
+        warning(t('audiotag_no_keys_configured_runtime'))
+        return
+    }
+
+    // Checkpoint: always insert the longer pause (single-key users get this too), and also
+    // rotate to a fresh key when multi-key mode is on and another usable one exists
+    if(keyManager.isCheckpoint(activeEntry.key)){
+        warning(t('audiotag_checkpoint_pause', { count: activeEntry.tracksUsed, seconds: keyManager.settings.pauseSeconds }))
+        await sleep(keyManager.settings.pauseSeconds)
+        if(keyManager.settings.useMultipleKeys){
+            const rotated = keyManager.rotateToNextKey()
+            if(rotated)
+                info(t('audiotag_key_rotated', { suffix: maskKey(rotated.key) }))
+        }
+        activeEntry = keyManager.getActiveKey()
+        if(!activeEntry){
+            keyManager.disabledForRun = true
+            warning(t('audiotag_no_keys_configured_runtime'))
+            return
+        }
+    }
+
+    let audiotagFile = file
+    let tempFile = null
+    let effectiveDuration = null
     try {
-        const response = await searchWithAudiotag(env.AUDIOTAG_KEY, file)
+        const duration = await probeDuration(env.FFMPEG_COMMAND, file)
+        effectiveDuration = duration
+        if(duration !== null && duration < keyManager.settings.minDurationSeconds){
+            info(t('audiotag_extending_short_clip', { file: fileBasename, duration: duration.toFixed(1), target: keyManager.settings.minDurationSeconds }))
+            tempFile = await loopExtendForAudiotag(env.FFMPEG_COMMAND, file, keyManager.settings.minDurationSeconds)
+            audiotagFile = tempFile
+            effectiveDuration = keyManager.settings.minDurationSeconds
+        }
+    }
+    catch(error){
+        warning(t('audiotag_duration_probe_failed', { file: fileBasename, error: error.message }))
+    }
+
+    // Randomized cooldown before every request, to avoid hammering AudioTag's server
+    const cooldownSeconds = randomInRange(keyManager.settings.cooldownMinSeconds, keyManager.settings.cooldownMaxSeconds)
+    if(cooldownSeconds > 0)
+        await sleep(cooldownSeconds)
+
+    try {
+        const response = await searchWithAudiotag(activeEntry.key, audiotagFile, { logPath: audiotagDebugLogPath() })
+        keyManager.recordTrackUsage(activeEntry.key)
+
+        appendAudiotagActivity({
+            file: fileBasename,
+            key: maskKey(activeEntry.key),
+            durationSeconds: effectiveDuration,
+            resultStatus: response.resultStatus,
+            errorCode: response.errorCode,
+            rawError: response.rawError,
+            match: response.match || null
+        })
+
         if(response.match){
             const resultsFile = createResultsLog(trimExtension(fileBasename), Mode.AUDIOTAG, `${JSON.stringify(response.match)}\n`)
             try {
@@ -725,13 +863,32 @@ async function audiotag(env, file){
                 warning(t('match_found_webhook_failed', { file: fileBasename, error: error.message }))
             }
         }
-        else if(response.error)
-            warning(t('search_failed', { mode: Mode.AUDIOTAG, file: fileBasename, error: response.error }))
+        else if(response.errorCode === 'CREDIT_EXHAUSTED' || response.errorCode === 'KEY_INVALID'){
+            const status = response.errorCode === 'CREDIT_EXHAUSTED' ? KeyStatus.EXHAUSTED : KeyStatus.INVALID
+            keyManager.markKeyStatus(activeEntry.key, status, response.rawError)
+            warning(t(response.errorCode === 'CREDIT_EXHAUSTED' ? 'audiotag_key_marked_exhausted' : 'audiotag_key_marked_invalid', { suffix: maskKey(activeEntry.key) }))
+            const rotated = keyManager.settings.useMultipleKeys ? keyManager.rotateToNextKey() : null
+            if(rotated)
+                info(t('audiotag_key_rotated', { suffix: maskKey(rotated.key) }))
+            else {
+                keyManager.disabledForRun = true
+                warning(t('audiotag_no_keys_available_skipping', { file: fileBasename }))
+            }
+        }
+        else if(response.errorCode){
+            const messageKey = AUDIOTAG_ERROR_MESSAGE_KEYS[response.errorCode] || 'audiotag_error_unknown'
+            warning(t(messageKey, { file: fileBasename, error: response.rawError || response.error?.message || '' }))
+        }
         else
             empty(t('no_match_found', { file: fileBasename, mode: Mode.AUDIOTAG }))
     }
     catch(error){
         warning(t('search_failed', { mode: Mode.AUDIOTAG, file: fileBasename, error: error.message }))
+    }
+    finally {
+        if(tempFile){
+            try { unlinkSync(tempFile) } catch { /* best effort cleanup */ }
+        }
     }
 }
 
@@ -780,11 +937,32 @@ async function init(){
         success(t('webhook_set_successfully'))
     }
     const modes = parseModes()
+    let audiotagKeyManager = null
     if(modes.includes(Mode.AUDIOTAG)){
-        const validatedAudiotag = await validateAudiotag(env.AUDIOTAG_KEY)
-        if(validatedAudiotag){
-            env.AUDIOTAG_KEY = validatedAudiotag
-            success(t('audiotag_key_set_successfully'))
+        const audiotagSettings = loadAudiotagSettings()
+        if(audiotagSettings.useMultipleKeys){
+            audiotagKeyManager = createAudiotagKeyManager(env.AUDIOTAG_KEY)
+            if(!audiotagKeyManager.hasUsableKey())
+                exit(t('audiotag_no_keys_configured'))
+        }
+        else {
+            const validatedAudiotag = await validateAudiotag(env.AUDIOTAG_KEY)
+            if(validatedAudiotag){
+                env.AUDIOTAG_KEY = validatedAudiotag
+                success(t('audiotag_key_set_successfully'))
+            }
+            audiotagKeyManager = createAudiotagKeyManager(env.AUDIOTAG_KEY)
+        }
+        const activeAudiotagKey = audiotagKeyManager.getActiveKey()
+        if(activeAudiotagKey){
+            ensureResultsFolder()
+            const stat = await getAudiotagStat(activeAudiotagKey.key, audiotagDebugLogPath())
+            if(stat)
+                info(t('audiotag_stat_summary', {
+                    balance: stat.current_credit_balance ?? '?',
+                    freeSecRemainder: stat.identification_free_sec_remainder ?? '?',
+                    queries: stat.queries_count ?? '?'
+                }))
         }
     }
     if(modes.includes(Mode.MUSICBRAINZ)){
@@ -829,7 +1007,7 @@ async function init(){
             }
             if(modes.includes(Mode.AUDIOTAG)){
                 info(t('searching_file_with_mode', { file: basenameMp3, mode: Mode.AUDIOTAG }))
-                await audiotag(env, mp3)
+                await audiotag(env, mp3, audiotagKeyManager)
             }
             if(modes.includes(Mode.SHAZAM)){
                 info(t('searching_file_with_mode', { file: basenameMp3, mode: Mode.SHAZAM }))
