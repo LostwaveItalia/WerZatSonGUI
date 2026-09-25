@@ -191,7 +191,7 @@ DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
 DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
 CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
 FORCE_STOP_LOG_MARKER_FILE = os.path.join(CUR_FOLDER, "force_stop_log_pending.json")
-APP_VERSION = "2.1.2"
+APP_VERSION = "2.1.3"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
 PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"

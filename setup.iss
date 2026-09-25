@@ -1,12 +1,12 @@
 [Setup]
 ; Basic Installer Configuration
 AppName=WerZatSonGUI
-AppVersion=2.1.2
+AppVersion=2.1.3
 AppPublisher=LostwaveItalia
 AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI
 AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI/issues
 AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI/releases
-VersionInfoVersion=2.1.2.0
+VersionInfoVersion=2.1.3.0
 VersionInfoCompany=WerZatSonGUI
 VersionInfoDescription=WerZatSonGUI Installer
 VersionInfoCopyright=WerZatSonGUI
@@ -215,4 +215,153 @@ begin
       LastSelectedMode := InstallModePage.SelectedValueIndex;
     end;
   end;
+end;
+
+// ============================================================
+//  Uninstaller: closes WerZatSonGUI (and its child tree) first
+// ============================================================
+
+// Reads {app}\config.json (which WerZatSonGUI itself wrote, and which still
+// exists at this point: [UninstallDelete] only runs after this function
+// returns True) and returns a short language code.
+//
+// Compared against the ASCII prefix of each language name rather than the
+// full "Português"/"Français" literals, because those names contain
+// non-ASCII characters and the config.json file on disk is UTF-8 without a
+// BOM (Python's json.dump with encoding="utf-8"), which LoadStringFromFile
+// may or may not decode correctly depending on the host's active code page.
+// The ASCII prefixes ("Italiano", "Portugu", "Fran") are unique across the
+// four languages the GUI supports, so they are enough to disambiguate and
+// are immune to code-page issues.
+function GetConfiguredLanguage(): string;
+var
+  ConfigPath: string;
+  Content: AnsiString;
+begin
+  Result := 'en'; // default to English if anything goes wrong
+
+  ConfigPath := ExpandConstant('{app}\config.json');
+  if not FileExists(ConfigPath) then
+    Exit;
+  if not LoadStringFromFile(ConfigPath, Content) then
+    Exit;
+
+  if Pos('"language": "Italiano"', Content) > 0 then
+    Result := 'it'
+  else if Pos('"language": "Portugu', Content) > 0 then
+    Result := 'pt'
+  else if Pos('"language": "Fran', Content) > 0 then
+    Result := 'fr';
+end;
+
+function GetUninstallPrompt(Count: Integer): string;
+var
+  Lang: string;
+  NL: String;
+begin
+  Lang := GetConfiguredLanguage();
+  NL := Chr(13) + Chr(10);   // CRLF
+
+  if Lang = 'it' then
+    Result := Format(
+      'WerZatSonGUI è ancora in esecuzione (%d processi correlati rilevati, ' +
+      'inclusi eventuali processi figli Node/FFmpeg di una scansione in corso).' +
+      NL + NL +
+      'Chiuderli e continuare la disinstallazione?' + NL +
+      'Eventuali scansioni in corso verranno interrotte.', [Count])
+
+  else if Lang = 'pt' then
+    Result := Format(
+      'WerZatSonGUI ainda está em execução (%d processo(s) relacionado(s) ' +
+      'encontrado(s), incluindo quaisquer processos filhos Node/FFmpeg de ' +
+      'uma verificação em andamento).' + NL + NL +
+      'Fechá-los e continuar a desinstalação?' + NL +
+      'Qualquer verificação em andamento será abortada.', [Count])
+
+  else if Lang = 'fr' then
+    Result := Format(
+      'WerZatSonGUI est toujours en cours d''exécution (%d processus associé(s) ' +
+      'détecté(s), y compris les processus enfants Node/FFmpeg d''une analyse ' +
+      'en cours).' + NL + NL +
+      'Les fermer et poursuivre la désinstallation ?' + NL +
+      'Toute analyse en cours sera interrompue.', [Count])
+
+  else
+    Result := Format(
+      'WerZatSonGUI is still running (%d related process(es) found, including ' +
+      'any in-progress scan''s Node/FFmpeg children).' + NL + NL +
+      'Close them and continue uninstalling?' + NL +
+      'Any pending scan in progress will be aborted.', [Count]);
+end;
+
+function GetWerZatSonRootPIDs(): TArrayOfString;
+var
+  ResultCode: Integer;
+  TmpFile: string;
+  Lines: TArrayOfString;
+  I: Integer;
+  PIDs: TArrayOfString;
+begin
+  SetArrayLength(PIDs, 0);
+  TmpFile := ExpandConstant('{tmp}\wzs_pids.txt');
+  DeleteFile(TmpFile);
+
+  Exec('powershell.exe',
+    '-NoProfile -ExecutionPolicy Bypass -Command ' +
+    '"Get-CimInstance Win32_Process | ' +
+    ' Where-Object { $_.CommandLine -and (' +
+    '   $_.CommandLine -like ''*WerZatSonGUI*'' -or ' +
+    '   $_.CommandLine -like ''*werzatsong.js*'' ' +
+    ' ) } | ' +
+    ' Where-Object { $_.Name -in @(''pythonw.exe'',''python.exe'',''python3.exe'',''py.exe'',''cmd.exe'',''node.exe'',''ffmpeg.exe'',''ffprobe.exe'') } | ' +
+    ' ForEach-Object { $_.ProcessId } | ' +
+    ' Out-File -Encoding ASCII ''' + TmpFile + '''"',
+    '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  if LoadStringsFromFile(TmpFile, Lines) then
+  begin
+    for I := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      if Trim(Lines[I]) <> '' then
+      begin
+        SetArrayLength(PIDs, GetArrayLength(PIDs) + 1);
+        PIDs[GetArrayLength(PIDs) - 1] := Trim(Lines[I]);
+      end;
+    end;
+  end;
+  DeleteFile(TmpFile);
+  Result := PIDs;
+end;
+
+// Called automatically by Inno Setup before the uninstall process starts.
+// Returning False aborts the uninstall.
+function InitializeUninstall(): Boolean;
+var
+  PIDs: TArrayOfString;
+  I: Integer;
+  ResultCode: Integer;
+  Params: string;
+begin
+  Result := True;
+  PIDs := GetWerZatSonRootPIDs();
+  if GetArrayLength(PIDs) = 0 then
+    Exit;
+
+  if MsgBox(GetUninstallPrompt(GetArrayLength(PIDs)),
+            mbConfirmation, MB_YESNO) <> IDYES then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  // /T on each PID kills the whole tree (cmd.exe -> node -> ffmpeg grandchildren),
+  // matching exactly what WerZatSonGUI itself does in _kill_pid_tree().
+  for I := 0 to GetArrayLength(PIDs) - 1 do
+  begin
+    Params := '/c taskkill /F /T /PID ' + PIDs[I];
+    Exec('cmd.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+
+  // Give Windows a moment to release handles on assets\, console_logs\, etc.
+  Sleep(2000);
 end;

@@ -287,7 +287,7 @@
 	"log_hash_table_listing_written": "[SUCCÈS]: Liste des nombres de hachage créée : {file}",
 	"log_hash_table_listing_error": "[ERREUR]: Échec de la création des nombres de hachage pour {file} : {error}",
 	"no_explanation": "Aucune explication disponible pour ce paramètre.",
-	"credits_line1": "WerZatSonGUI v2.1.2",
+	"credits_line1": "WerZatSonGUI v2.1.3",
 	"credits_line1_rest": " par some random account, avec la contribution de EierkuchenHD, VoidGod, Mystic65, Numerophobe et bytesofmyself. Testeurs: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduction en français par jacktorrance_overlook.",
 	"credits_line2": "Script batch WerZatSong",
 	"credits_line2_rest": " par some random account, avec une logique de génération de fichiers basée sur la vitesse/le tempo développée par Mystic65.",
