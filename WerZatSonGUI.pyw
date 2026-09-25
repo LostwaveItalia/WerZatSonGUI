@@ -31,6 +31,15 @@ try:
     import concurrent.futures
     import ctypes
     from ctypes import wintypes
+
+    if os.name == "nt":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "LostwaveItalia.WerZatSonGUI"
+            )
+        except Exception:
+            pass
+        
     import contextlib
     import io
     import importlib
@@ -138,6 +147,7 @@ ENV_EXAMPLE_FILE = os.path.join(ASSETS_FOLDER, ".env.example")
 AUDIOTAG_KEYS_FILE = os.path.join(ASSETS_FOLDER, "audiotag_keys.json")
 AUDIOTAG_KEYS_EXAMPLE_FILE = os.path.join(ASSETS_FOLDER, "audiotag_keys.example.json")
 LOGO_FILE = os.path.join(ASSETS_FOLDER, "logo.png")
+LOGO_ICO_FILE = os.path.join(ASSETS_FOLDER, "logo.ico")
 WEBHOOK_JS_FILE = os.path.join(ASSETS_FOLDER, "utils", "webhook.js")
 
 SETTING_EXPLANATIONS_FILE_ENGLISH = os.path.join(ASSETS_FOLDER, "localizations", "advanced_setting_explanations_English.json")
@@ -174,10 +184,11 @@ DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
 DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
 CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
 FORCE_STOP_LOG_MARKER_FILE = os.path.join(CUR_FOLDER, "force_stop_log_pending.json")
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.1.1"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
 PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"
+FINGERPRINTING_GUI_URL = "https://github.com/EierkuchenHD/fingerprinter/releases"
 LOSTWAVE_ITALIA_SONGS_URL = "https://drive.google.com/drive/folders/1S0Tj-PrdKzUc1jZ4c2feUGcyBABLdaEy"
 FRENCH_LOSTWAVE_SONGS_URL = "https://drive.google.com/drive/folders/1NLVjBYXNdWy_kxp21Npds6T3F6QpA520"
 USER_QLOSTWAVE_UPLOADS_URL = "https://drive.google.com/drive/folders/1dlU0MmdcwzYXB_LqYz9KZdokD7lO5ZMW"
@@ -1006,53 +1017,128 @@ def setup_theme_listener(root):
     listener_thread.start()
 
 
+def apply_titlebar_theme(window, theme_mode="System"):
+    """Applies the native OS title-bar theme (dark/light) to any window (root or
+    Toplevel). sv_ttk only styles the widget tree *inside* a window; the OS-drawn
+    title bar needs this DWM/pywinstyles treatment separately, which is why every
+    Toplevel must also call this."""
+    if theme_mode == "Light":
+        target_theme = "light"
+    elif theme_mode == "Dark":
+        target_theme = "dark"
+    else:
+        target_theme = darkdetect.theme() or "light"
+    target_theme = target_theme.lower()
+    is_dark = (target_theme == "dark")
+
+    # Ensure the toplevel's HWND is actually realized before we poke DWM. Without
+    # this, calling DwmSetWindowAttribute on a just-created Toplevel is a silent
+    # no-op on Windows: the frame hasn't been created yet, so there's nothing for
+    # the attribute to attach to. This is why after_idle alone was not enough.
+    try:
+        window.update_idletasks()
+    except tk.TclError:
+        return
+
+    version = sys.getwindowsversion()
+    is_server = getattr(version, 'product_type', 1) != 1
+
+    try:
+        if version.major == 10 and version.build >= 22000:
+            try:
+                pywinstyles.apply_style(window, "dark" if is_dark else "normal")
+            except Exception:
+                hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+                value = ctypes.c_int(1 if is_dark else 0)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
+            try:
+                pywinstyles.change_header_color(window, "#1c1c1c" if is_dark else "#fafafa")
+            except Exception:
+                pass
+
+        elif version.major == 10:
+            if is_server:
+                hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+                attribute = 20 if version.build >= 18985 else 19
+                value = ctypes.c_int(1 if is_dark else 0)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
+            else:
+                pywinstyles.apply_style(window, "dark" if is_dark else "normal")
+
+            window.wm_attributes("-alpha", 0.99)
+            window.wm_attributes("-alpha", 1)
+
+    except Exception as e:
+        print(f"[WARNING]: Could not apply custom title bar styles: {e}")
+
+
 def apply_theme_to_gui(root, theme_mode="System"):
     if theme_mode == "Light":
         target_theme = "light"
     elif theme_mode == "Dark":
         target_theme = "dark"
     else:
-        # Prevent crash if darkdetect returns None on Windows Server
-        target_theme = darkdetect.theme()
-        if target_theme is None:
-            target_theme = "light" # Default fallback
-            
-    # Ensure lowercase for sv_ttk compatibility
+        target_theme = darkdetect.theme() or "light"
     target_theme = target_theme.lower()
-
     sv_ttk.set_theme(target_theme)
-    version = sys.getwindowsversion()
-    
-    # Check if the OS is a Server edition (product_type != 1 means Server/Domain Controller)
-    is_server = getattr(version, 'product_type', 1) != 1
 
-    # Wrap in try/except so DWM failures don't crash the entire GUI
-    try:
-        if version.major == 10 and version.build >= 22000:
-            # Sets the title bar color to the background color on Windows 11
-            pywinstyles.change_header_color(root, "#1c1c1c" if target_theme == "dark" else "#fafafa")
-            
-        elif version.major == 10:
-            if is_server:
-                # pywinstyles can easily fail on Server OS. ctypes used to force it natively.
-                root.update_idletasks() # Ensure the window is drawn to get a valid HWND
-                hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
-                
-                # Attribute 20 is DWMWA_USE_IMMERSIVE_DARK_MODE for build >= 18985 (Server 2022 is 20348)
-                # Attribute 19 is for older builds (like Server 2019 / build 17763)
-                attribute = 20 if version.build >= 18985 else 19
-                value = ctypes.c_int(1 if target_theme == "dark" else 0)
-                
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
-            else:
-                pywinstyles.apply_style(root, "dark" if target_theme == "dark" else "normal")
+    apply_titlebar_theme(root, theme_mode)
+    for child in root.winfo_children():
+        if isinstance(child, tk.Toplevel):
+            apply_titlebar_theme(child, theme_mode)
 
-            # Updates the title bar's color on Windows 10 & Server 2022 (forces a DWM refresh)
-            root.wm_attributes("-alpha", 0.99)
-            root.wm_attributes("-alpha", 1)
-            
-    except Exception as e:
-        print(f"[WARNING]: Could not apply custom title bar styles: {e}")
+class ThemedToplevel(tk.Toplevel):
+    """Toplevel that mirrors the main window's native title-bar theme.
+
+    Plain tk.Toplevel gets sv_ttk-styled widget contents but keeps the OS-default
+    (light) title bar, because sv_ttk cannot reach the DWM-drawn frame. This
+    subclass applies the same title-bar treatment the root window gets in
+    apply_theme_to_gui, and walks up the master chain so nested dialogs (e.g.
+    the ones created inside _prompt_files_or_folder) find the root's config_data
+    too.
+    """
+    def __init__(self, master=None, **kwargs):
+        super().__init__(master=master, **kwargs)
+
+        theme_mode = "System"
+        widget = master
+        while widget is not None:
+            if hasattr(widget, "config_data"):
+                theme_mode = widget.config_data.get("theme_mode", "System")
+                break
+            widget = getattr(widget, "master", None)
+
+        self._titlebar_themed = False
+
+        def _on_map(_event=None):
+            # Fires the first time the window is actually shown. At that point the
+            # OS-level frame exists, so DWM will accept the style change. Also
+            # re-applies on subsequent maps (e.g. after minimize/restore) since
+            # some Windows builds lose the attribute across those transitions.
+            try:
+                self.update_idletasks()
+            except tk.TclError:
+                return
+            self._titlebar_themed = True
+            apply_titlebar_theme(self, theme_mode)
+
+        self.bind("<Map>", _on_map, add="+")
+
+        # Safety net: if for any reason <Map> never fires (very old Tk, exotic WM),
+        # also try once after a short delay. after_idle was too early; 60ms is
+        # comfortably past the point where the frame exists on every Windows build
+        # I've tested, and it's still imperceptible to a user opening a dialog.
+        def _delayed_apply():
+            if self._titlebar_themed:
+                return
+            try:
+                if self.winfo_exists() and self.winfo_ismapped():
+                    _on_map()
+            except tk.TclError:
+                pass
+        self.after(60, _delayed_apply)
 
 
 def format_size(num_bytes):
@@ -1491,6 +1577,13 @@ class WerZatSongGUI(tk.Tk):
         self._toggle_buttons = []  # (button, content_frame, default_expanded)
         self._env_toggle_buttons = []  # (button, key)
 
+        self._icon_img = None
+        ico_path = os.path.join(ASSETS_FOLDER, "logo.ico")
+        if os.name == "nt" and os.path.exists(ico_path):
+            try:
+                self.iconbitmap(default=ico_path)
+            except Exception:
+                pass
         try:
             self._icon_img = tk.PhotoImage(file=LOGO_FILE)
             self.iconphoto(True, self._icon_img)
@@ -2040,7 +2133,7 @@ class WerZatSongGUI(tk.Tk):
 
     def _show_setting_help(self, key):
         explanation = self.setting_explanations.get(key, self._tr("no_explanation"))
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("setting_info_title"))
         top.resizable(False, False)
         top.transient(self)
@@ -2058,7 +2151,7 @@ class WerZatSongGUI(tk.Tk):
         used to leave one button stranded far to the right of an empty stretchy column). Picking
         either option opens the normal _show_setting_help(key) popup on top of this one; Close
         just dismisses the chooser."""
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("selection_help_title"))
         top.resizable(False, False)
         top.transient(self)
@@ -2427,7 +2520,7 @@ class WerZatSongGUI(tk.Tk):
         Returns the entered string (stripped) when confirmed, or None when
         cancelled / closed / left blank."""
         result = {"value": None}
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("edit_key_prompt_title" if edit_mode else "add_key_prompt_title"))
         top.resizable(False, False)
         top.transient(self)
@@ -2484,7 +2577,7 @@ class WerZatSongGUI(tk.Tk):
         the AudioTag tab: the [?] explanation, the "use multiple keys" toggle, and
         the key list editor. Keeping it out of the notebook tab is what allows the
         AudioTag tab to be roughly the same height as every other settings tab."""
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("audiotag_tab"))
         top.transient(self)
         top.geometry("560x460")
@@ -3576,7 +3669,7 @@ class WerZatSongGUI(tk.Tk):
         return img
 
     def _open_credits(self):
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("credits_title"))
         top.resizable(False, False)
         top.transient(self)
@@ -3684,7 +3777,7 @@ class WerZatSongGUI(tk.Tk):
                 walker.count += 1
                 walker = walker.parent
 
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("song_selection_title"))
         top.transient(self)
         top.geometry("860x620")
@@ -4108,7 +4201,7 @@ class WerZatSongGUI(tk.Tk):
         selected_folders = {f for f in saved_folders if f in known_folders}
         selected_files = {f for f in saved_files if f in files_index}
 
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr("pklz_folder_selection_title"))
         top.transient(self)
         top.geometry("760x600")
@@ -4561,7 +4654,7 @@ class WerZatSongGUI(tk.Tk):
         if pending == 0:
             return
 
-        win = tk.Toplevel(self)
+        win = ThemedToplevel(self)
         win.title(self._tr("pklz_staging_title"))
         win.transient(self)
         win.resizable(False, False)
@@ -4733,7 +4826,7 @@ class WerZatSongGUI(tk.Tk):
         show_song_databases_btn: whether to show the "Download Song Databases..." button.
         """
         result = {"choice": None}
-        top = tk.Toplevel(self)
+        top = ThemedToplevel(self)
         top.title(self._tr(title_key))
         top.resizable(False, False)
         top.transient(self)
@@ -4752,19 +4845,51 @@ class WerZatSongGUI(tk.Tk):
         ttk.Button(btns, text=self._tr("cancel_btn"), command=lambda: pick(None)).pack(side="left", padx=5)
 
         if show_pklz_link:
-            link = tk.Label(top, text=self._tr("public_pklz_link"), fg="#1a56db", cursor="hand2",
-                            font=("Segoe UI", 9, "underline"))
-            link.pack(pady=(0, 4))
-            link.bind("<Button-1>", lambda _event: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL))
+            def _open_pklz_databases_window():
+                db_top = ThemedToplevel(top)
+                db_top.title(self.gui_strings.get("public_pklz_databases_btn",
+                                                  "Public PKLZ Databases..."))
+                db_top.resizable(False, False)
+                db_top.transient(top)
 
-            link_alt = tk.Label(top, text=self._tr("public_pklz_link_alt"), fg="#1a56db", cursor="hand2",
-                                font=("Segoe UI", 9, "underline"))
-            link_alt.pack(pady=(0, 15))
-            link_alt.bind("<Button-1>", lambda _event: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL_ALT))
+                db_btns = ttk.Frame(db_top, padding=(20, 20, 20, 20))
+                db_btns.pack()
+
+                ttk.Button(db_btns, text=self._tr("public_pklz_link"),
+                           command=lambda: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL)).pack(fill="x", pady=5)
+
+                ttk.Button(db_btns, text=self._tr("public_pklz_link_alt"),
+                           command=lambda: webbrowser.open(PUBLIC_PKLZ_DATABASE_URL_ALT)).pack(fill="x", pady=5)
+
+                ttk.Button(db_btns, text=self._tr("cancel_btn"),
+                           command=db_top.destroy).pack(fill="x", padx=5)
+
+                db_top.grab_set()
+
+            tk.Button(
+                top,
+                text=self.gui_strings.get("public_pklz_databases_btn", "Public PKLZ Databases..."),
+                command=_open_pklz_databases_window,
+                fg="#1a56db",
+                activeforeground="#1a56db",
+                font=("Segoe UI", 10, "bold"),
+                cursor="hand2",
+            ).pack(pady=(0, 15))
+
+            fingerprint_gui_btn = tk.Button(
+                top,
+                text=self._tr("get_fingerprinting_gui_btn"),
+                command=lambda: webbrowser.open(FINGERPRINTING_GUI_URL),
+                fg="#1a56db",
+                activeforeground="#1a56db",
+                font=("Segoe UI", 10, "bold"),
+                cursor="hand2",
+            )
+            fingerprint_gui_btn.pack(pady=(0, 15))
 
         if show_song_databases_btn:
             def _open_databases_window():
-                db_top = tk.Toplevel(top)
+                db_top = ThemedToplevel(top)
                 db_top.title(self._tr("download_song_databases_btn"))
                 db_top.resizable(False, False)
                 db_top.transient(top)
@@ -4781,11 +4906,19 @@ class WerZatSongGUI(tk.Tk):
                 ttk.Button(db_btns, text=self._tr("user_qlostwave_uploads_link"), 
                            command=lambda: webbrowser.open(USER_QLOSTWAVE_UPLOADS_URL)).pack(fill="x", pady=5)
                 
-                ttk.Button(db_btns, text=self._tr("cancel_btn"), command=lambda: pick(None)).pack(fill="x", padx=5)
+                ttk.Button(db_btns, text=self._tr("cancel_btn"), command=db_top.destroy).pack(fill="x", padx=5)
 
                 db_top.grab_set()
 
-            ttk.Button(top, text=self._tr("download_song_databases_btn"), command=_open_databases_window).pack(pady=(0, 15))
+            tk.Button(
+                top,
+                text=self._tr("download_song_databases_btn"),
+                command=_open_databases_window,
+                fg="#1a56db",
+                activeforeground="#1a56db",
+                font=("Segoe UI", 10, "bold"),
+                cursor="hand2",
+            ).pack(pady=(0, 15))
 
         # Seed the radio group's initial state from config_data. validate_config() has already
         # guaranteed the key exists and holds "copy" or "move", so the .get() default here is a

@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 2.1.0](https://img.shields.io/badge/Version-2.1.0-orange)
+![Version: 2.1.1](https://img.shields.io/badge/Version-2.1.1-orange)
 
 ![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
@@ -513,6 +513,6 @@ WerZatSonGUI currently ships with **English**, **Italian**, **French** and **Por
 
 ## Credits
 
-- **WerZatSonGUI v2.1.0** by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65 and Numerophobe. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, gabry4072_, Mystic65.
+- **WerZatSonGUI v2.1.1** by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65, Numerophobe and bytesofmyself. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.

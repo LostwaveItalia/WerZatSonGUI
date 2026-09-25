@@ -1,12 +1,12 @@
 [Setup]
 ; Basic Installer Configuration
 AppName=WerZatSonGUI
-AppVersion=2.1.0
+AppVersion=2.1.1
 AppPublisher=LostwaveItalia
 AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI
 AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI/issues
 AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI/releases
-VersionInfoVersion=2.1.0.0
+VersionInfoVersion=2.1.1.0
 VersionInfoCompany=WerZatSonGUI
 VersionInfoDescription=WerZatSonGUI Installer
 VersionInfoCopyright=WerZatSonGUI
