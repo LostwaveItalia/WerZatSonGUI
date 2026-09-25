@@ -21,11 +21,35 @@ import scipy.io
 if sys.version_info[0] >= 3:
     # Python 3 specific definitions
     import pickle  # Py3
-    basestring = (str, bytes)  # Py3
-    pickle_options = {'encoding': 'latin1'}
 else:
     # Python 2 specific definitions
     import cPickle as pickle  # Py2
+
+# .pklz files created with numpy 2.x store class references under "numpy._core.*", but
+# numpy 1.x only exposes "numpy.core.*". Rather than trying to alias sys.modules, a
+# custom Unpickler rewrites the module path on the fly, before pickle hands it to the
+# import machinery. On numpy 2.x this rewrite is harmless: numpy 2.x ships numpy.core as
+# a working alias for numpy._core, so rewriting produces an equivalent import.
+_NUMPY_CORE_PREFIX = "numpy._core"
+_NUMPY_CORE_REAL_PREFIX = "numpy.core"
+
+
+def _rewrite_numpy_core_module(module):
+    if module == _NUMPY_CORE_PREFIX or module.startswith(_NUMPY_CORE_PREFIX + "."):
+        return _NUMPY_CORE_REAL_PREFIX + module[len(_NUMPY_CORE_PREFIX):]
+    return module
+
+
+class _NumpyCoreCompatUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        return super().find_class(_rewrite_numpy_core_module(module), name)
+
+
+if sys.version_info[0] >= 3:
+    basestring = (str, bytes)
+    pickle_options = {'encoding': 'latin1'}
+else:
+    basestring = (str, bytes)
     pickle_options = {}
 
 
@@ -216,7 +240,7 @@ class HashTable(object):
             f = file_object
         else:
             f = gzip.open(name, 'rb')
-        temp = pickle.load(f, **pickle_options)
+        temp = _NumpyCoreCompatUnpickler(f, **pickle_options).load()
         if temp.ht_version < HT_OLD_COMPAT_VERSION:
             raise ValueError('Version of ' + name + ' is ' + str(temp.ht_version)
                              + ' which is not at least ' +

@@ -287,7 +287,7 @@
 	"log_hash_table_listing_written": "[SUCCESSO]: Conteggio hash creato: {file}",
 	"log_hash_table_listing_error": "[ERRORE]: Impossibile creare un conteggio hash per {file}: {error}",
 	"no_explanation": "Nessuna spiegazione disponibile per quest'impostazione.",
-	"credits_line1": "WerZatSonGUI v2.1.1",
+	"credits_line1": "WerZatSonGUI v2.1.2",
 	"credits_line1_rest": " di some random account con contributi da EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Tester: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduzione in italiano a cura di some random account.",
 	"credits_line2": "Script per provare in blocco canzoni su WerZatSong",
 	"credits_line2_rest": " di some random account con logica per la generazione di file a velocità alternative di Mystic65.",

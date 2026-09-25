@@ -23,6 +23,25 @@ class Tee:
 sys.stdout = Tee(sys.stdout, errlog_gui_file)
 sys.stderr = Tee(sys.stderr, errlog_gui_file)
 
+python_dir = os.path.dirname(sys.executable)
+possible_exes = ["py.exe", "python.exe", "python3.exe"]
+pyw_folder = os.path.dirname(os.path.abspath(__file__))
+req_file = os.path.join(pyw_folder, "requirements.txt")
+
+def find_console_python():
+    """Returns the path to a console-variant Python interpreter next to the one
+    currently running this app. .pyw files are launched by pythonw.exe, which has
+    no console and discards stdout/stderr, so anything that's spawned via PYTHON_COMMAND
+    needs the console sibling instead. Falls back to sys.executable if no sibling
+    is found."""
+    for exe in possible_exes:
+        candidate = os.path.join(python_dir, exe)
+        if os.path.exists(candidate):
+            return candidate
+    return sys.executable
+
+python_executable = find_console_python()
+
 try:
     import sv_ttk
     import darkdetect
@@ -62,18 +81,6 @@ try:
 except Exception as e:
     error_details = traceback.format_exc()
 
-    python_dir = os.path.dirname(sys.executable)
-    pyw_folder = os.path.dirname(os.path.abspath(__file__))
-    req_file = os.path.join(pyw_folder, "requirements.txt")
-
-    possible_exes = ["py.exe", "python.exe", "python3.exe"]
-    python_executable = None
-    for exe in possible_exes:
-        exe_path = os.path.join(python_dir, exe)
-        if os.path.exists(exe_path):
-            python_executable = exe_path
-            break
-
     error_msg = (
     f"Crash prevented!\n\n"
     f"Windows is running this file using:\n{sys.executable}\n"
@@ -100,7 +107,7 @@ except Exception as e:
     try:
         # In a standard console window showing the pip install progress
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", req_file],
+            [python_executable, "-m", "pip", "install", "-r", req_file],
             creationflags=subprocess.CREATE_NEW_CONSOLE,
             check=True
         )
@@ -184,7 +191,7 @@ DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
 DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
 CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
 FORCE_STOP_LOG_MARKER_FILE = os.path.join(CUR_FOLDER, "force_stop_log_pending.json")
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.1.2"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
 PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"
@@ -2781,7 +2788,7 @@ class WerZatSongGUI(tk.Tk):
                 "PYTHON_COMMAND",
                 "python_command_label",
                 "python",
-                sys.executable,
+                f'"{python_executable}"',
                 "use_python_btn",
                 "use_python_fullpath_btn",
                 "python_command"
@@ -5179,6 +5186,7 @@ class WerZatSongGUI(tk.Tk):
                     "numpy._core.umath": _np.core.umath,
                     "numpy._core._multiarray_umath": _np.core._multiarray_umath,
                     "numpy._core.numerictypes": _np.core.numerictypes,
+                    "numpy._core.numeric": _np.core.numeric,
                 }
                 for _alias, _target in _aliases.items():
                     sys.modules.setdefault(_alias, _target)

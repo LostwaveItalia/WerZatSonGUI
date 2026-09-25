@@ -23,7 +23,7 @@ async function extendFile(file, offset){
     if(offset === 0)
         copyFileSync(file, destPath)
     else
-        await execPromise(`${process.env.FFMPEG_COMMAND} -i "${consts.FILLER_FILE}" -i "${file}" -filter_complex "[0:a]atrim=0:${offset},asetpts=PTS-STARTPTS[trimmed];[trimmed][1:a]concat=n=2:v=0:a=1[concat];[concat]atrim=0:${MUSICBRAINZ_LIMIT},asetpts=PTS-STARTPTS[final]" -map "[final]" -c:a libmp3lame -q:a 2 -ar 44100 "${destPath}"`)
+        await execPromise(`"${process.env.FFMPEG_COMMAND}" -i "${consts.FILLER_FILE}" -i "${file}" -filter_complex "[0:a]atrim=0:${offset},asetpts=PTS-STARTPTS[trimmed];[trimmed][1:a]concat=n=2:v=0:a=1[concat];[concat]atrim=0:${MUSICBRAINZ_LIMIT},asetpts=PTS-STARTPTS[final]" -map "[final]" -c:a libmp3lame -q:a 2 -ar 44100 "${destPath}"`)
     return destPath
 }
 

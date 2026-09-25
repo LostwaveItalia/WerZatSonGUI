@@ -17,7 +17,7 @@ const execPromise = promisify(exec)
 const { argv } = yargs(hideBin(process.argv))
 
 async function matchFingerprint(fingerprint){
-    await execPromise(`${process.env.PYTHON_COMMAND} "${consts.AUDFPRINT_PROGRAM}" match --min-count 5 --max-matches 75 --search-depth 10000 --dbase "${fingerprint}" --list "${consts.AFPTS_FILE}" >> "${join(consts.TEMP_FOLDER, `${basename(fingerprint)}.match.txt`)}"`)
+    await execPromise(`"${process.env.PYTHON_COMMAND}" "${consts.AUDFPRINT_PROGRAM}" match --min-count 5 --max-matches 75 --search-depth 10000 --dbase "${fingerprint}" --list "${consts.AFPTS_FILE}" >> "${join(consts.TEMP_FOLDER, `${basename(fingerprint)}.match.txt`)}"`)
 }
 
 async function storeResults(basenameFingerprint){

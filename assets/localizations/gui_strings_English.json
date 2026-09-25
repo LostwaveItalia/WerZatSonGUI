@@ -287,7 +287,7 @@
 	"log_hash_table_listing_written": "[SUCCESS]: Created hash count: {file}",
 	"log_hash_table_listing_error": "[ERROR]: Failed to create hash count for {file}: {error}",
 	"no_explanation": "No explanation available for this setting.",
-	"credits_line1": "WerZatSonGUI v2.1.1",
+	"credits_line1": "WerZatSonGUI v2.1.2",
 	"credits_line1_rest": " by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65, Numerophobe and bytesofmyself. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65.",
 	"credits_line2": "WerZatSong batch script",
 	"credits_line2_rest": " by some random account, with speed/tempo-based file generation logic by Mystic65.",

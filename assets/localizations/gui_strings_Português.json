@@ -287,7 +287,7 @@
 	"log_hash_table_listing_written": "[SUCESSO]: Contagens de hash criadas: {file}",
 	"log_hash_table_listing_error": "[ERRO]: Falha ao criar contagens de hash para {file}: {error}",
 	"no_explanation": "Nenhuma explicação disponível para esta configuração.",
-	"credits_line1": "WerZatSonGUI v2.1.1",
+	"credits_line1": "WerZatSonGUI v2.1.2",
 	"credits_line1_rest": " por some random account, com contribuições de EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Testadores: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Tradução para o português brasileiro: (W.I.P.).",
 	"credits_line2": "Script em lote do WerZatSong",
 	"credits_line2_rest": " por some random account, com lógica de geração de arquivos baseada em velocidade/tempo criada por Mystic65.",
