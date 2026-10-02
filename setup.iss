@@ -369,7 +369,7 @@ end;
 
 function ShowUninstallPrompt(Count: Integer): Boolean;
 var
-  Form: TSetupForm;
+  Form: TForm;
   MsgLabel: TLabel;
   YesBtn, NoBtn: TButton;
   Lang, YesCaption, NoCaption: string;
@@ -379,11 +379,11 @@ begin
   GetYesNoCaptions(Lang, YesCaption, NoCaption);
   Prompt := GetUninstallPrompt(Count);
 
-  Form := TSetupForm.Create(nil);
+  Form := TForm.Create(nil);
   try
     Form.Caption := 'WerZatSonGUI';
     Form.ClientWidth := ScaleX(420);
-    Form.ClientHeight := ScaleY(200);
+    Form.ClientHeight := ScaleY(220);
     Form.Position := poScreenCenter;
     Form.BorderStyle := bsDialog;
 
@@ -401,7 +401,7 @@ begin
     YesBtn.Parent := Form;
     YesBtn.Caption := YesCaption;
     YesBtn.ModalResult := mrYes;
-    YesBtn.Width := ScaleX(75);
+    YesBtn.Width := ScaleX(85);
     YesBtn.Height := ScaleY(25);
     YesBtn.Left := Form.ClientWidth - ScaleX(16) - YesBtn.Width * 2 - ScaleX(8);
     YesBtn.Top := Form.ClientHeight - ScaleY(16) - YesBtn.Height;
@@ -411,7 +411,7 @@ begin
     NoBtn.Parent := Form;
     NoBtn.Caption := NoCaption;
     NoBtn.ModalResult := mrNo;
-    NoBtn.Width := ScaleX(75);
+    NoBtn.Width := ScaleX(85);
     NoBtn.Height := ScaleY(25);
     NoBtn.Left := Form.ClientWidth - ScaleX(16) - NoBtn.Width;
     NoBtn.Top := YesBtn.Top;
