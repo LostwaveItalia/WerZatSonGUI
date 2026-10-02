@@ -1,6 +1,6 @@
 # WerZatSonGUI
 ![Piattaforma: Windows x64](https://img.shields.io/badge/Piattaforma-Windows%20x64-blue)
-![Versione: 2.1.3](https://img.shields.io/badge/Versione-2.1.3-orange)
+![Versione: 2.2.0](https://img.shields.io/badge/Versione-2.2.0-orange)
 
 ![WerZatSonGUI durante una scansione in modalità scura](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI durante una scansione in modalità chiara](../assets/images/gui_screenshot_2.png)
@@ -375,6 +375,7 @@ Se la modalità Lunga viene eseguita o meno in questa sessione è ora deciso dal
 
 Scegliere sottocartelle PKLZ specifiche ora si fa tramite il pulsante **Seleziona cartelle PKLZ...** sulla **scheda Generali**, non su questa scheda; il popup **[?]** accanto ad esso spiega i compromessi nello scegliere più di una sottocartella.
 
+- **Oltrepassa il numero massimo di thread:** Quando è selezionato, WerZatSong non limiterà più a 16 il numero di thread di Audfprint. Questa opzione appare solo se la tua macchina ha più di 16 processori logici. Attivala solo se sai quello che stai facendo: usare più thread di quanti la tua CPU possa gestirne può causare errori di memoria o rallentare altri programmi. Il valore inserito nel campo del numero di thread verrà usato esattamente come scritto, senza limite massimo.
 - **Numero di thread della CPU utilizzati:** stabilisce quanti thread della CPU usa la modalità Audfprint. WerZatSong stesso limita questo valore a **16** indipendentemente da cosa inserisci, per aiutare a evitare di esaurire la memoria; lasciando questo deselezionato, Audfprint userà automaticamente tutti i thread disponibili sulla tua macchina.
 - **Profondità della ricerca:** controlla quanto approfonditamente Audfprint cerca una corrispondenza, da `1` a `8`. Valori più alti eseguono una "ricerca approfondita" più accurata per le clip di bassa qualità, ma possono aumentare significativamente i tempi di elaborazione. Il valore predefinito è `4`.
 
@@ -477,30 +478,33 @@ La primissima volta che avvii questa versione, un eventuale `PROCESSED.txt` esis
 
 Ogni volta che una scansione trova una probabile corrispondenza, succedono due cose:
 
-1. Una notifica (e, per la maggior parte delle modalità, un piccolo file `.txt` con i dati grezzi della corrispondenza) viene pubblicata dal tuo **Webhook di Discord**.
+1. Una notifica viene pubblicata sul tuo **Webhook di Discord**. Le voci di corrispondenza sono mostrate direttamente nel corpo del messaggio, dentro un blocco di codice, così puoi leggerle a colpo d'occhio senza dover aprire un allegato. Se il report è troppo lungo per il limite di 2000 caratteri di Discord, il messaggio viene troncato con una nota che indica quante righe sono state tagliate, e il report completo viene allegato come file `.txt` insieme ad esso.
 2. Al termine dell'elaborazione di ogni gruppo/file, WerZatSonGUI copia ogni file di risultati generato durante quel processo in una nuova sottocartella con data e ora della tua **Cartella dei log** (vedi [*Cartelle predefinite*](#cartelle-predefinite) sopra e [*Formato dei log*](#formato-dei-log) più sotto), e stampa esattamente dove nella console (`[SUCCESSO]: log per '...' salvati in '...'`) in modo da non doverli mai cercare manualmente.
 
-Se un gruppo/file non produce alcuna corrispondenza in nessuna modalità abilitata, non viene creata alcuna sottocartella di log per esso, con un'eccezione: ogni volta che viene eseguita la modalità AudioTag, i suoi log sempre attivi `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` (vedi Formato dei log più sotto) vengono comunque scritti nella sottocartella della tua Cartella dei log di quella esecuzione anche con zero corrispondenze, dato che il loro scopo è proprio rendere tracciabile ogni chiamata ad AudioTag, non solo quelle riuscite. Ogni altra modalità continua a comparire nella tua Cartella dei log solo per le corrispondenze vere e proprie.
+Anche una ricerca che non trova alcuna corrispondenza sopra la soglia di affidabilità (o nessun candidato) pubblica una breve notifica `[<mode>]: <file> - non trovata` sullo stesso webhook, così un risultato vuoto è visibile quanto una corrispondenza. Gli errori API di AudioTag e Shazam vengono registrati nella console ma **non** generano un messaggio webhook di "nessuna corrispondenza", dato che una ricerca fallita non è la stessa cosa di una ricerca riuscita che non ha trovato nulla.
+
+Se un gruppo/file non produce alcuna corrispondenza in nessuna modalità abilitata, non viene creata alcuna sottocartella di log per esso, con un'eccezione: ogni volta che viene eseguita la modalità AudioTag, i suoi log sempre attivi `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` (vedi [*Formato dei log*](#formato-dei-log) più sotto) vengono comunque scritti nella sottocartella della tua Cartella dei log di quella esecuzione anche con zero corrispondenze, dato che il loro scopo è proprio rendere tracciabile ogni chiamata ad AudioTag, non solo quelle riuscite. Ogni altra modalità continua a comparire nella tua Cartella dei log solo per le corrispondenze vere e proprie.
 
 ## Formato dei log
 
 Il formato esatto dipende dalla modalità di ricerca:
 
 - I log di **MusicBrainz, Audiotag e Shazam** sono semplici: un risultato per riga (MusicBrainz), oppure i dati grezzi della corrispondenza così come sono (Audiotag/Shazam). Non serve nulla di più elaborato perché ciascuna di queste modalità restituisce al massimo un piccolo numero di candidati già valutati. **AudioTag** inoltre scrive sempre `_audiotag_activity.jsonl` (una riga per traccia elaborata, che porti o meno a una corrispondenza, con il relativo esito) e `_audiotag_debug.jsonl` (la richiesta/risposta grezza per ogni singola chiamata all'API di AudioTag) nella cartella dei risultati della stessa esecuzione, indipendentemente dal fatto che sia stata trovata una corrispondenza — a differenza degli altri log di questa pagina, questi due vengono scritti anche per un'esecuzione con zero corrispondenze, così una ricerca AudioTag fallita o saltata è sempre tracciabile. Le chiavi API non vengono mai scritte per intero in questi log, solo le loro ultime 4 cifre.
-- I log di **Audfprint** sono più ricchi, perché una singola ricerca può restituire molti candidati che devono essere confrontati tra loro. Ogni log inizia con un breve blocco **LEGENDA** che spiega il formato, seguito da ogni candidato corrispondente, elencato dal più al meno probabile, formattato su due righe ciascuno:
+- I log di **Audfprint** sono più ricchi, perché una singola ricerca può restituire molti candidati che devono essere confrontati tra loro. Ogni log inizia con un breve blocco **LEGENDA** che spiega il formato, seguito da ogni candidato corrispondente, elencato dal più al meno probabile, formattato su due righe ciascuno. L'esempio qui sotto mostra la resa in italiano:
 	```
-    [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s
-    <matched file name> (<matched file path>)
+    [ETICHETTA] <allineati> allineati / <grezzi> grezzi (<cons>%) | x<hits> | #<rank> | <pklz di origine> | offset <t>s
+    <nome del file trovato> (<percorso del file trovato>)
     ```
-	- **aligned:** il numero di hash corrispondenti temporalmente coerenti tra il tuo file e il candidato. È la principale prova da prendere in considerazione: la documentazione di Audfprint nota che più di 5-6 hash allineati di solito significano una corrispondenza autentica.
-	- **raw:** tutti gli hash che i due file hanno in comune, prima del filtraggio per quelli che si allineano nel tempo.
-	- **cons% (coerenza):** `aligned / raw` come percentuale. File casuali e non correlati restano sotto circa l'1%, quindi anche una percentuale modesta qui è significativa.
+ 	Sia il testo della LEGENDA sia i nomi dei campi all'interno di questo modello sono traducibili, quindi una scansione eseguita con WerZatSonGUI impostato su un'altra lingua mostra la stessa forma con le parole di quella lingua (per esempio, in inglese viene reso come `[LABEL] <aligned> aligned / <raw> raw (<cons>%) | ...`). Ciò che non cambia mai è il numero di campi, il loro ordine, o il significato di ciascuno:
+	- **allineati:** il numero di hash corrispondenti temporalmente coerenti tra il tuo file e il candidato. È la principale prova da prendere in considerazione: la documentazione di Audfprint nota che più di 5-6 hash allineati di solito significano una corrispondenza autentica.
+	- **grezzi:** tutti gli hash che i due file hanno in comune, prima del filtraggio per quelli che si allineano nel tempo.
+	- **cons% (coerenza):** `allineati / grezzi` come percentuale. File casuali e non correlati restano sotto circa l'1%, quindi anche una percentuale modesta qui è significativa.
 	- **hits:** quanti allineamenti separati sono stati trovati per questo candidato.
 	- **rank:** la posizione del candidato nel pre-ordinamento interno di Audfprint (contesto utile, non una misura di confidenza di per sé).
 	- **offset:** dove l'audio del tuo file si allinea con il candidato, in secondi (negativo significa che il tuo file sembra iniziare prima).
-	- **LABEL:** un riassunto in linguaggio semplice di quanto sia affidabile la corrispondenza: **VERY STRONG**, **STRONG** e **PROBABLE** sono abbastanza forti da inviare anche un messaggio via webhook Discord; **BORDERLINE** significa che è sotto quella soglia ma merita comunque un controllo manuale; **NO MATCH** significa che non ha superato alcuna soglia.
+	- **ETICHETTA:** un riassunto in un linguaggio semplice di quanto sia affidabile la corrispondenza: **MOLTO FORTE**, **FORTE** e **PROBABILE** sono abbastanza forti da inviare anche un messaggio via webhook Discord; **BORDERLINE** significa che è sotto quella soglia ma merita comunque un controllo manuale; **NON TROVATA** significa che non ha superato alcuna soglia.
 
-La stessa legenda e formattazione sono usate sia nel file di log `.txt` sia nel file dei risultati allegato al post del webhook Discord, quindi corrispondono sempre.
+La stessa legenda e la stessa formattazione delle voci sono usate in tre punti che corrispondono sempre tra loro: il file di log .txt su disco, il blocco di codice all'interno del messaggio webhook di Discord, e il file .txt allegato a quel messaggio webhook se è stato necessario troncarlo. Sia la legenda che il modello delle voci sono traducibili, quindi tutti e tre mostrano i nomi dei campi nella lingua corrente. Gli esempi in italiano qui sopra sono ciò che vedi quando WerZatSonGUI è impostato in italiano: le altre lingue seguono la stessa struttura, ma con le proprie parole.
 
 ## Aggiungere una lingua / Traduzioni
 
@@ -508,6 +512,6 @@ WerZatSonGUI attualmente è disponibile in **italiano**, **inglese**, **francese
 
 ## Crediti
 
-- **WerZatSonGUI v2.1.3** di some random account, con contributi da EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Tester: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduzione in italiano a cura di some random account.
+- **WerZatSonGUI v2.2.0** di some random account, con contributi da EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Tester: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduzione in italiano a cura di some random account.
 - **Script per provare in blocco canzoni su WerZatSong** di some random account, con logica per la generazione di file a velocità alternative di Mystic65.
 - **WerZatSong** di Nel, con contributi da Numerophobe, AzureBlast e Mystic65.

@@ -1,6 +1,6 @@
 # WerZatSonGUI
 ![Plateforme: Windows x64](https://img.shields.io/badge/Platforme-Windows%20x64-blue)
-![Version: 2.1.3](https://img.shields.io/badge/Version-2.1.3-orange)
+![Version: 2.2.0](https://img.shields.io/badge/Version-2.2.0-orange)
 
 ![WerZatSonGUI effectuant une analyse en mode sombre](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI effectuant une analyse en mode clair](../assets/images/gui_screenshot_2.png)
@@ -378,7 +378,8 @@ Le fait que le mode Long s'exécute ou non lors de cette session est désormais 
 
 Le choix de sous-dossiers PKLZ spécifiques se fait désormais via le bouton **Sélectionner des dossiers PKLZ...** de l'**onglet Général**, plus sur cet onglet; le popup **[?]** à côté explique les compromis liés au choix de plusieurs sous-dossiers.
 
-- **Définir le nombre de fils CPU à utiliser:** définit combien de fils CPU le mode Audfprint utilise. WerZatSong lui-même plafonne cela à **16** quelle que soit la valeur saisie, pour aider à éviter l'épuisement de la mémoire; laisser cette case décochée lui permet d'utiliser automatiquement tous les threads disponibles sur votre machine.
+- **Dépasser le nombre maximal de fils:** Lorsque cette option est cochée, WerZatSong ne plafonnera plus Audfprint à 16 fils. Cette option n'apparaît que si votre machine possède plus de 16 processeurs logiques. Activez-la uniquement si vous savez ce que vous faites: utiliser plus de fils que votre processeur ne peut en gérer peut provoquer des erreurs de mémoire ou ralentir d'autres programmes. La valeur du champ du nombre de fils sera utilisée exactement telle quelle, sans limite supérieure.
+- **Définir le nombre de fils CPU à utiliser:** définit combien de fils CPU le mode Audfprint utilise. WerZatSong lui-même plafonne cela à **16** quelle que soit la valeur saisie, pour aider à éviter l'épuisement de la mémoire; laisser cette case décochée lui permet d'utiliser automatiquement tous les fils disponibles sur votre machine.
 - **Définir la profondeur de recherche sur:** contrôle l'agressivité avec laquelle Audfprint recherche une correspondance, de `1` à `8`. Des valeurs plus élevées effectuent une "recherche approfondie" plus minutieuse pour les extraits de faible qualité, mais peuvent augmenter considérablement le temps de traitement. Par défaut `4`.
 
 #### Onglet MusicBrainz
@@ -480,8 +481,10 @@ La toute première fois que vous lancez cette version, tout `PROCESSED.txt` exis
 
 Chaque fois qu'une analyse trouve une correspondance probable, deux choses se produisent:
 
-1. Une notification (et, pour la plupart des modes, un petit fichier de résultats `.txt` avec les données brutes de correspondance) est publiée sur votre **Webhook Discord**.
+1. Une notification est publiée sur votre **Webhook Discord**. Les entrées de correspondance sont affichées directement dans le corps du message, à l'intérieur d'un bloc de code, pour que vous puissiez les lire d'un coup d'œil sans ouvrir de pièce jointe. Si le rapport est trop long pour la limite de 2000 caractères de Discord, le message est tronqué avec une note indiquant combien de lignes ont été coupées, et le rapport complet est joint sous forme de fichier `.txt`.
 2. À la fin du traitement de chaque lot/fichier, WerZatSonGUI copie tous les fichiers de résultats générés pendant celui-ci dans un nouveau sous-dossier horodaté de votre **répertoire des journaux** (voir [*Répertoires par défaut*](#répertoires-par-défaut) ci-dessus et [*Format des journaux*](#format-des-journaux) ci-dessous), et affiche exactement où dans la console (`[RÉUSSI]: Journaux pour '...' enregistrés dans '...'`) afin que vous n'ayez jamais à chercher manuellement.
+
+Une recherche qui ne renvoie aucune correspondance au-dessus du seuil de confiance (ou aucun candidat du tout) publie également une courte notification `[<mode>]: <file> - non trouvée` sur le même webhook, afin qu'un résultat vide soit aussi visible qu'une correspondance. Les erreurs d'API AudioTag et Shazam sont enregistrées dans la console mais ne génèrent **pas** de message webhook « aucune correspondance », car une recherche échouée n'est pas la même chose qu'une recherche réussie n'ayant rien trouvé.
 
 Si un lot/fichier ne produit aucune correspondance dans aucun mode activé, aucun sous-dossier de journal n'est créé pour lui, à une exception près: chaque fois que le mode **AudioTag** s'exécute, ses journaux toujours actifs `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` (voir [*Format des journaux*](#format-des-journaux) ci-dessous) sont quand même écrits dans le sous-dossier du répertoire des journaux de cette exécution, même sans aucune correspondance, car leur seul but est de rendre chaque appel AudioTag traçable, pas seulement les correspondances réussies. Tous les autres modes n'apparaissent toujours dans votre répertoire de journaux qu'en cas de correspondances réelles.
 
@@ -490,20 +493,21 @@ Si un lot/fichier ne produit aucune correspondance dans aucun mode activé, aucu
 Le format exact dépend du mode de recherche:
 
 - Les journaux **MusicBrainz, Audiotag et Shazam** sont simples: un résultat par ligne (MusicBrainz), ou les données brutes de correspondance telles quelles (Audiotag/Shazam). Rien de plus sophistiqué n'est nécessaire car chacun de ces modes renvoie au plus un petit nombre de candidats déjà notés. **AudioTag** écrit en plus toujours `_audiotag_activity.jsonl` (une ligne par piste traitée, correspondance ou non, avec son résultat) et `_audiotag_debug.jsonl` (la requête/réponse brute de chaque appel individuel à l'API AudioTag) dans le dossier de résultats de la même exécution, que des correspondances aient été trouvées ou non — contrairement aux autres journaux de cette page, ces deux fichiers sont écrits même pour une exécution sans aucune correspondance, afin qu'une recherche AudioTag échouée ou ignorée reste toujours traçable. Les clés API ne sont jamais écrites en entier dans ces journaux, seulement leurs 4 derniers caractères.
-- Les journaux **Audfprint** sont plus riches, car une seule recherche peut renvoyer de nombreux candidats qui doivent être comparés entre eux. Chacun commence par un court bloc **LEGEND** expliquant le format, suivi de chaque correspondance candidate, classée du plus au moins probable, formatée en deux lignes chacune:
+- Les journaux **Audfprint** sont plus riches, car une seule recherche peut renvoyer de nombreux candidats qui doivent être comparés entre eux. Chacun commence par un court bloc **LÉGENDE** expliquant le format, suivi de chaque correspondance candidate, classée du plus au moins probable, formatée en deux lignes chacune. L'exemple ci-dessous montre le rendu en français:
 	```
-    [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s
-    <matched file name> (<matched file path>)
+    [ÉTIQUETTE] <alignés> alignés / <bruts> bruts (<cons>%) | x<hits> | #<rank> | <pklz source> | offset <t>s
+    <nom du fichier correspondant> (<chemin du fichier correspondant>)
     ```
-    - **aligned:** le nombre de hachages correspondants cohérents dans le temps entre votre fichier et le candidat. C'est la principale preuve à prendre en compte: la documentation d'Audfprint note que plus de 5-6 hachages alignés signifie généralement une véritable correspondance.
-    - **raw:** tous les hachages que les deux fichiers ont en commun, avant filtrage pour ceux qui s'alignent dans le temps.
-    - **cons% (consistency):** `aligned / raw` en pourcentage. Les fichiers aléatoires et non liés restent en dessous d'environ 1%, donc même un pourcentage modeste ici est significatif.
-    - **hits:** combien de succès d'alignement distincts ont été trouvés pour ce candidat.
-    - **rank:** la position du candidat dans le pré-classement interne d'Audfprint (contexte utile, pas une mesure de confiance en soi).
-    - **offset:** où l'audio de votre fichier s'aligne avec le candidat, en secondes (négatif signifie que votre fichier semble commencer plus tôt).
-    - **LABEL:** un résumé en langage clair du degré de confiance de la correspondance: **VERY STRONG**, **STRONG** et **PROBABLE** sont assez forts pour qu'un message de webhook Discord soit également envoyé pour eux; **BORDERLINE** signifie que c'est en dessous de cette barre mais vaut quand même un coup d'œil manuel; **NO MATCH** signifie qu'aucun seuil n'a été franchi.
+ 	Le texte de la LÉGENDE et les noms de champs de ce modèle sont traduisibles, donc une analyse lancée avec WerZatSonGUI réglé sur une autre langue affichera la même forme avec les mots de cette langue (par exemple, l'anglais rend `[LABEL] <aligned> aligned / <raw> raw (<cons>%) | ...`). Ce qui ne change jamais, c'est le nombre de champs, leur ordre, et la signification de chacun:
+	- **alignés:** le nombre de hachages correspondants cohérents dans le temps entre votre fichier et le candidat. C'est la principale preuve à prendre en compte: la documentation d'Audfprint note que plus de 5-6 hachages alignés signifie généralement une véritable correspondance.
+	- **bruts:** tous les hachages que les deux fichiers ont en commun, avant filtrage pour ceux qui s'alignent dans le temps.
+	- **cons% (consistency):** `alignés / bruts` en pourcentage. Les fichiers aléatoires et non liés restent en dessous d'environ 1%, donc même un pourcentage modeste ici est significatif.
+	- **hits:** combien de succès d'alignement distincts ont été trouvés pour ce candidat.
+	- **rank:** la position du candidat dans le pré-classement interne d'Audfprint (contexte utile, pas une mesure de confiance en soi).
+	- **offset:** où l'audio de votre fichier s'aligne avec le candidat, en secondes (négatif signifie que votre fichier semble commencer plus tôt).
+	- **ÉTIQUETTE:** un résumé en langage clair du degré de confiance de la correspondance: **TRÈS FORTE**, **FORTE** et **PROBABLE** sont assez forts pour qu'un message de webhook Discord soit également envoyé pour eux; **BORDERLINE** signifie que c'est en dessous de cette barre mais vaut quand même un coup d'œil manuel; **NON TROUVÉE** signifie qu'aucun seuil n'a été franchi.
 
-La même légende et le même formatage sont utilisés à la fois dans le fichier journal `.txt` et dans le fichier de résultats joint au message du webhook Discord, afin qu'ils correspondent toujours.
+La même légende et le même format d'entrée sont utilisés à trois endroits qui correspondent toujours entre eux: le fichier journal .txt sur le disque, le bloc de code à l'intérieur du message webhook Discord, et le fichier .txt joint à ce message webhook s'il a dû être tronqué. La légende et le modèle d'entrée sont tous deux traduisibles, donc les trois affichent les noms de champs de la langue active. Les exemples en français ci-dessus sont ce que vous voyez lorsque WerZatSonGUI est réglé en français: les autres langues suivent la même structure, mais avec leurs propres mots.
 
 ## Ajouter une langue / Traductions
 
@@ -511,6 +515,6 @@ WerZatSonGUI est actuellement livré avec le **français**, l'**anglais**, l'**i
 
 ## Crédits
 
-- **WerZatSonGUI v2.1.3** par some random account, avec la contribution de EierkuchenHD, VoidGod, Mystic65, Numerophobe et bytesofmyself. Testeurs: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduction en français par jacktorrance_overlook.
+- **WerZatSonGUI v2.2.0** par some random account, avec la contribution de EierkuchenHD, VoidGod, Mystic65, Numerophobe et bytesofmyself. Testeurs: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Traduction en français par jacktorrance_overlook.
 - **Script batch WerZatSong** par some random account, avec la logique de génération de fichiers basée sur la vitesse/le tempo développée par Mystic65.
 - **WerZatSong** par Nel, avec la contribution de Numerophobe, AzureBlast et Mystic65.

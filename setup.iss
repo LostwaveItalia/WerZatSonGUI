@@ -1,12 +1,12 @@
 [Setup]
 ; Basic Installer Configuration
 AppName=WerZatSonGUI
-AppVersion=2.1.3
+AppVersion=2.2.0
 AppPublisher=LostwaveItalia
 AppPublisherURL=https://github.com/LostwaveItalia/WerZatSonGUI
 AppSupportURL=https://github.com/LostwaveItalia/WerZatSonGUI/issues
 AppUpdatesURL=https://github.com/LostwaveItalia/WerZatSonGUI/releases
-VersionInfoVersion=2.1.3.0
+VersionInfoVersion=2.2.0.0
 VersionInfoCompany=WerZatSonGUI
 VersionInfoDescription=WerZatSonGUI Installer
 VersionInfoCopyright=WerZatSonGUI
@@ -31,6 +31,12 @@ Name: "italian"; MessagesFile: "Languages\Italian.isl"
 Name: "french"; MessagesFile: "Languages\French.isl"
 Name: "portuguese"; MessagesFile: "Languages\BrazilianPortuguese.isl"
 
+[Messages]
+english.UninstallAppFullTitle=Uninstall %1
+italian.UninstallAppFullTitle=Disinstalla %1
+french.UninstallAppFullTitle=Désinstaller %1
+portuguese.UninstallAppFullTitle=Desinstalar %1
+
 [CustomMessages]
 english.DesktopIconDesc=Create a desktop shortcut
 english.AdditionalShortcuts=Additional shortcuts:
@@ -40,6 +46,7 @@ english.InstallModeTitle=Installation Mode
 english.InstallModeDesc=Please choose how you want to install WerZatSonGUI.
 english.InstallModeAll=Install for all users
 english.InstallModeUser=Install just for me
+english.UninstallShortcut=Uninstall WerZatSonGUI
 
 italian.DesktopIconDesc=Crea un collegamento sul desktop
 italian.AdditionalShortcuts=Collegamenti aggiuntivi:
@@ -49,6 +56,7 @@ italian.InstallModeTitle=Modalità di installazione
 italian.InstallModeDesc=Scegli per chi desideri installare WerZatSonGUI.
 italian.InstallModeAll=Installa per tutti gli utenti
 italian.InstallModeUser=Installa solo per me
+italian.UninstallShortcut=Disinstalla WerZatSonGUI
 
 french.DesktopIconDesc=Créer un raccourci sur le bureau
 french.AdditionalShortcuts=Raccourcis supplémentaires:
@@ -58,6 +66,7 @@ french.InstallModeTitle=Mode d'installation
 french.InstallModeDesc=Veuillez choisir pour qui vous souhaitez installer WerZatSonGUI.
 french.InstallModeAll=Installer pour tous les utilisateurs
 french.InstallModeUser=Installer uniquement pour moi
+french.UninstallShortcut=Désinstaller WerZatSonGUI
 
 portuguese.DesktopIconDesc=Criar um atalho na área de trabalho
 portuguese.AdditionalShortcuts=Atalhos adicionais:
@@ -67,6 +76,7 @@ portuguese.InstallModeTitle=Modo de instalação
 portuguese.InstallModeDesc=Escolha para quem deseja instalar o WerZatSonGUI.
 portuguese.InstallModeAll=Instalar para todos os usuários
 portuguese.InstallModeUser=Instalar apenas para mim
+portuguese.UninstallShortcut=Desinstalar WerZatSonGUI
 
 [Files]
 ; Helper files for installing dependencies
@@ -87,7 +97,7 @@ Name: "desktopicon"; Description: "{cm:DesktopIconDesc}"; GroupDescription: "{cm
 
 [Icons]
 Name: "{group}\WerZatSonGUI"; Filename: "{app}\WerZatSonGUI.pyw"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"
-Name: "{group}\Uninstall WerZatSonGUI"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:UninstallShortcut}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\WerZatSonGUI"; Filename: "{app}\WerZatSonGUI.pyw"; WorkingDir: "{app}"; IconFilename: "{app}\assets\logo.ico"; Tasks: desktopicon
 
 [Run]
@@ -313,7 +323,7 @@ begin
     '   $_.CommandLine -like ''*WerZatSonGUI*'' -or ' +
     '   $_.CommandLine -like ''*werzatsong.js*'' ' +
     ' ) } | ' +
-    ' Where-Object { $_.Name -in @(''pythonw.exe'',''python.exe'',''python3.exe'',''py.exe'',''cmd.exe'',''node.exe'',''ffmpeg.exe'',''ffprobe.exe'') } | ' +
+    ' Where-Object { $_.Name -like ''python*.exe'' -or $_.Name -in @(''py.exe'',''cmd.exe'',''node.exe'',''ffmpeg.exe'',''ffprobe.exe'') } | ' +
     ' ForEach-Object { $_.ProcessId } | ' +
     ' Out-File -Encoding ASCII ''' + TmpFile + '''"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -333,8 +343,86 @@ begin
   Result := PIDs;
 end;
 
-// Called automatically by Inno Setup before the uninstall process starts.
-// Returning False aborts the uninstall.
+procedure GetYesNoCaptions(Lang: string; var YesCaption: string; var NoCaption: string);
+begin
+  if Lang = 'it' then
+  begin
+    YesCaption := 'Sì';
+    NoCaption  := 'No';
+  end
+  else if Lang = 'pt' then
+  begin
+    YesCaption := 'Sim';
+    NoCaption  := 'Não';
+  end
+  else if Lang = 'fr' then
+  begin
+    YesCaption := 'Oui';
+    NoCaption  := 'Non';
+  end
+  else
+  begin
+    YesCaption := 'Yes';
+    NoCaption  := 'No';
+  end;
+end;
+
+function ShowUninstallPrompt(Count: Integer): Boolean;
+var
+  Form: TSetupForm;
+  MsgLabel: TLabel;
+  YesBtn, NoBtn: TButton;
+  Lang, YesCaption, NoCaption: string;
+  Prompt: string;
+begin
+  Lang := GetConfiguredLanguage();
+  GetYesNoCaptions(Lang, YesCaption, NoCaption);
+  Prompt := GetUninstallPrompt(Count);
+
+  Form := TSetupForm.Create(nil);
+  try
+    Form.Caption := 'WerZatSonGUI';
+    Form.ClientWidth := ScaleX(420);
+    Form.ClientHeight := ScaleY(200);
+    Form.Position := poScreenCenter;
+    Form.BorderStyle := bsDialog;
+
+    MsgLabel := TLabel.Create(Form);
+    MsgLabel.Parent := Form;
+    MsgLabel.Left := ScaleX(16);
+    MsgLabel.Top := ScaleY(16);
+    MsgLabel.Width := Form.ClientWidth - ScaleX(32);
+    MsgLabel.Height := Form.ClientHeight - ScaleY(80);
+    MsgLabel.AutoSize := False;
+    MsgLabel.WordWrap := True;
+    MsgLabel.Caption := Prompt;
+
+    YesBtn := TButton.Create(Form);
+    YesBtn.Parent := Form;
+    YesBtn.Caption := YesCaption;
+    YesBtn.ModalResult := mrYes;
+    YesBtn.Width := ScaleX(75);
+    YesBtn.Height := ScaleY(25);
+    YesBtn.Left := Form.ClientWidth - ScaleX(16) - YesBtn.Width * 2 - ScaleX(8);
+    YesBtn.Top := Form.ClientHeight - ScaleY(16) - YesBtn.Height;
+    YesBtn.Default := True;
+
+    NoBtn := TButton.Create(Form);
+    NoBtn.Parent := Form;
+    NoBtn.Caption := NoCaption;
+    NoBtn.ModalResult := mrNo;
+    NoBtn.Width := ScaleX(75);
+    NoBtn.Height := ScaleY(25);
+    NoBtn.Left := Form.ClientWidth - ScaleX(16) - NoBtn.Width;
+    NoBtn.Top := YesBtn.Top;
+    NoBtn.Cancel := True;
+
+    Result := Form.ShowModal = mrYes;
+  finally
+    Form.Free;
+  end;
+end;
+
 function InitializeUninstall(): Boolean;
 var
   PIDs: TArrayOfString;
@@ -347,21 +435,17 @@ begin
   if GetArrayLength(PIDs) = 0 then
     Exit;
 
-  if MsgBox(GetUninstallPrompt(GetArrayLength(PIDs)),
-            mbConfirmation, MB_YESNO) <> IDYES then
+  if not ShowUninstallPrompt(GetArrayLength(PIDs)) then
   begin
     Result := False;
     Exit;
   end;
 
-  // /T on each PID kills the whole tree (cmd.exe -> node -> ffmpeg grandchildren),
-  // matching exactly what WerZatSonGUI itself does in _kill_pid_tree().
   for I := 0 to GetArrayLength(PIDs) - 1 do
   begin
     Params := '/c taskkill /F /T /PID ' + PIDs[I];
     Exec('cmd.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 
-  // Give Windows a moment to release handles on assets\, console_logs\, etc.
   Sleep(2000);
 end;

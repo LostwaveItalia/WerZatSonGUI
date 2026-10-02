@@ -1,6 +1,6 @@
 # WerZatSonGUI
 ![Plataforma: Windows x64](https://img.shields.io/badge/Plataforma-Windows%20x64-blue)
-![Versão: 2.1.3](https://img.shields.io/badge/Versão-2.1.3-orange)
+![Versão: 2.2.0](https://img.shields.io/badge/Versão-2.2.0-orange)
 
 ![WerZatSonGUI executando uma varredura no modo escuro](../assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI executando uma varredura no modo claro](../assets/images/gui_screenshot_2.png)
@@ -381,6 +381,7 @@ Se o Modo Longo é executado ou não nesta sessão agora é decidido pelo seleto
 
 Escolher subpastas PKLZ específicas agora é feito através do botão **Selecionar pastas PKLZ...** na **aba Geral**, não nesta aba; o popup **[?]** ao lado explica as vantagens e desvantagens de escolher mais de uma subpasta.
 
+- **Exceder o número máximo de threads:** Quando marcado, o WerZatSong não limitará mais o Audfprint a 16 threads. Esta opção só aparece se sua máquina tiver mais de 16 processadores lógicos. Ative-a apenas se souber o que está fazendo: usar mais threads do que sua CPU consegue gerenciar pode causar erros de memória ou deixar outros programas lentos. O valor no campo de número de threads será usado exatamente como escrito, sem limite superior.
 - **Definir o número de threads da CPU a serem usados:** define quantos threads da CPU o modo Audfprint usa. O próprio WerZatSong limita isso a **16**, independentemente do valor inserido, para evitar falta de memória; deixar desmarcado permite usar automaticamente todos os threads disponíveis na sua máquina.
 - **Defina a profundidade de pesquisa como:** controla o quão agressivamente o Audfprint procura por uma correspondência, de `1` a `8`. Valores mais altos realizam uma "busca profunda" mais minuciosa para clipes de baixa qualidade, mas podem aumentar significativamente o tempo de processamento. O padrão é `4`.
 
@@ -472,8 +473,10 @@ Na primeiríssima vez que você iniciar esta versão, qualquer `PROCESSED.txt` e
 
 Sempre que uma varredura encontra uma correspondência provável, duas coisas acontecem:
 
-1. Uma notificação (e, para a maioria dos modos, um pequeno arquivo de resultados `.txt` com os dados brutos da correspondência) é postada no seu **Webhook do Discord**.
+1. Uma notificação é postada no seu **Webhook do Discord**. As entradas de correspondência são mostradas diretamente no corpo da mensagem, dentro de um bloco de código, para que você possa lê-las rapidamente sem abrir um anexo. Se o relatório for muito longo para o limite de 2000 caracteres do Discord, a mensagem é truncada com uma nota informando quantas linhas foram cortadas, e o relatório completo é anexado como arquivo `.txt`.
 2. Ao final do processamento de cada lote/arquivo, o WerZatSonGUI copia todos os arquivos de resultados gerados durante ele para uma nova subpasta com carimbo de data/hora do seu **Diretório de Logs** (veja [*Diretórios Padrão*](#diret%C3%B3rios-padr%C3%A3o) acima e [*Formato dos Logs*](#formato-dos-logs) abaixo) e imprime exatamente onde no console (`[SUCESSO]: Logs para '...' salvos em '...'`) para que você nunca precise procurar manualmente.
+
+Uma busca que não retorna correspondências acima do limite de confiança (ou nenhum candidato) também publica uma breve notificação `[<mode>]: <file> - não encontrada` no mesmo webhook, para que um resultado vazio seja tão visível quanto uma correspondência. Erros de API do AudioTag e do Shazam são registrados no console, mas **não** geram uma publicação de "nenhuma correspondência", pois uma busca falha não é a mesma coisa que uma busca bem-sucedida que não encontrou nada.
 
 Se um lote/arquivo não produzir correspondências em nenhum modo ativado, nenhuma subpasta de log é criada para ele, com uma exceção: sempre que o modo AudioTag é executado, seus logs sempre ativos `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` (veja [*Formato dos Logs*](#formato-dos-logs) abaixo) ainda são gravados na subpasta do Diretório de Logs dessa execução mesmo com zero correspondências, já que todo o propósito deles é tornar rastreável toda chamada do AudioTag, não apenas as bem-sucedidas. Todos os outros modos continuam aparecendo no seu Diretório de Logs apenas para correspondências genuínas.
 
@@ -482,20 +485,21 @@ Se um lote/arquivo não produzir correspondências em nenhum modo ativado, nenhu
 O formato exato depende do modo de busca:
 
 - Os logs do **MusicBrainz, Audiotag e Shazam** são simples: um resultado por linha (MusicBrainz) ou os dados brutos da correspondência como estão (Audiotag/Shazam). Nada mais sofisticado é necessário, pois cada um desses modos retorna no máximo um pequeno número de candidatos já pontuados. O **AudioTag** também sempre grava `_audiotag_activity.jsonl` (uma linha por faixa processada, com ou sem correspondência, com seu resultado) e `_audiotag_debug.jsonl` (a solicitação/resposta bruta de cada chamada individual à API do AudioTag) na pasta de resultados dessa mesma execução, independentemente de alguma correspondência ter sido encontrada — diferente dos outros logs desta página, esses dois são gravados mesmo em uma execução com zero correspondências, para que uma busca do AudioTag falha ou ignorada seja sempre rastreável. As chaves de API nunca são gravadas por completo nesses logs, apenas seus últimos 4 caracteres.
-- Os logs do **Audfprint** são mais ricos, pois uma única busca pode retornar muitos candidatos que precisam ser julgados entre si. Cada um começa com um bloco curto de **LEGENDA** explicando o formato, seguido por cada correspondência candidata, listada da mais para a menos provável, formatada em duas linhas cada:
+- Os logs do **Audfprint** são mais ricos, pois uma única busca pode retornar muitos candidatos que precisam ser julgados entre si. Cada um começa com um bloco curto de **LEGENDA** explicando o formato, seguido por cada correspondência candidata, listada da mais para a menos provável, formatada em duas linhas cada. O exemplo abaixo mostra a renderização em português:
 	```
-    [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s
-    <matched file name> (<matched file path>)
+    [RÓTULO] <alinhados> alinhados / <brutos> brutos (<cons>%) | x<hits> | #<rank> | <pklz de origem> | offset <t>s
+    <nome do arquivo correspondente> (<caminho do arquivo correspondente>)
     ```
-    - **aligned:** o número de hashes correspondentes consistentes no tempo entre seu arquivo e o candidato. Esta é a principal evidência que você deve levar em conta: a documentação do Audfprint observa que mais de 5-6 hashes alinhados geralmente significam uma correspondência genuína.
-    - **raw:** todos os hashes que os dois arquivos têm em comum, antes de filtrar aqueles que se alinham no tempo.
-    - **cons% (consistency):** `aligned / raw` como porcentagem. Arquivos aleatórios e não relacionados ficam abaixo de cerca de 1%, então mesmo uma porcentagem modesta aqui é significativa.
-    - **hits:** quantos acertos de alinhamento separados foram encontrados para este candidato.
-    - **rank:** a posição do candidato no pré-ranqueamento interno do Audfprint (contexto útil, não uma medida de confiança por si só).
-    - **offset:** onde o áudio do seu arquivo se alinha com o candidato, em segundos (negativo significa que seu arquivo parece começar mais cedo).
-    - **LABEL:** um resumo em linguagem simples de quão confiável é a correspondência: **VERY STRONG**, **STRONG** e **PROBABLE** são fortes o suficiente para que uma mensagem de webhook do Discord também seja enviada para eles; **BORDERLINE** significa que está abaixo dessa barra, mas ainda vale uma olhada manual; **NO MATCH** significa que não ultrapassou nenhum limiar.
+ 	Tanto o texto da LEGENDA quanto os nomes dos campos dentro deste modelo são traduzíveis, portanto uma varredura executada com o WerZatSonGUI configurado em outro idioma mostra a mesma forma com as palavras daquele idioma (por exemplo, o inglês renderiza `[LABEL] <aligned> aligned / <raw> raw (<cons>%) | ...`). O que nunca muda é o número de campos, sua ordem, ou o significado de cada um:
+	- **alinhados:** o número de hashes correspondentes consistentes no tempo entre seu arquivo e o candidato. Esta é a principal evidência que você deve levar em conta: a documentação do Audfprint observa que mais de 5-6 hashes alinhados geralmente significam uma correspondência genuína.
+	- **brutos:** todos os hashes que os dois arquivos têm em comum, antes de filtrar aqueles que se alinham no tempo.
+	- **cons% (consistency):** `alinhados / brutos` como porcentagem. Arquivos aleatórios e não relacionados ficam abaixo de cerca de 1%, então mesmo uma porcentagem modesta aqui é significativa.
+	- **hits:** quantos acertos de alinhamento separados foram encontrados para este candidato.
+	- **rank:** a posição do candidato no pré-ranqueamento interno do Audfprint (contexto útil, não uma medida de confiança por si só).
+	- **offset:** onde o áudio do seu arquivo se alinha com o candidato, em segundos (negativo significa que seu arquivo parece começar mais cedo).
+	- **RÓTULO:** um resumo em linguagem simples de quão confiável é a correspondência: **MUITO FORTE**, **FORTE** e **PROVÁVEL** são fortes o suficiente para que uma mensagem de webhook do Discord também seja enviada para eles; **BORDERLINE** significa que está abaixo dessa barra, mas ainda vale uma olhada manual; **NÃO ENCONTRADA** significa que não ultrapassou nenhum limiar.
 
-A mesma legenda e formatação são usadas tanto no arquivo de log `.txt` quanto no arquivo de resultados anexado à mensagem do webhook do Discord, para que sempre correspondam.
+A mesma legenda e o mesmo formato de entrada são usados em três lugares que sempre coincidem: o arquivo de log .txt no disco, o bloco de código dentro da mensagem do webhook do Discord, e o arquivo .txt anexado a essa mensagem do webhook caso ela tenha sido truncada. Tanto a legenda quanto o modelo de entrada são traduzíveis, portanto os três mostram os nomes dos campos no idioma atual. Os exemplos em português acima são o que você vê quando o WerZatSonGUI está configurado para português: os outros idiomas seguem a mesma estrutura, mas com suas próprias palavras.
 
 ## Adicionando um Idioma / Traduções
 
@@ -503,6 +507,6 @@ O WerZatSonGUI atualmente é distribuído com **Português**, **Inglês**, **Ita
 
 ## Créditos
 
-- **WerZatSonGUI v2.1.3** por some random account, com contribuições de EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Testadores: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Tradução para o português brasileiro: (W.I.P.).
+- **WerZatSonGUI v2.2.0** por some random account, com contribuições de EierkuchenHD, VoidGod, Mystic65, Numerophobe e bytesofmyself. Testadores: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65. Tradução para o português brasileiro: (W.I.P.).
 - **Script em lote do WerZatSong** por some random account, com lógica de geração de arquivos baseada em velocidade/tempo criada por Mystic65.
 - **WerZatSong** por Nel, com contribuições de Numerophobe, AzureBlast e Mystic65.

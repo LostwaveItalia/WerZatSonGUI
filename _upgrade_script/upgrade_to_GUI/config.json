@@ -21,6 +21,7 @@
 	"custom_webhook_image_link": "https://cdn.discordapp.com/app-icons/1509584409748050011/5136222148bbb7541919a2e5c89924f1.webp",
 	"use_custom_thread_count": false,
 	"custom_thread_count_value": "4",
+	"override_max_thread_count": false,
 	"custom_musicbrainz_duration_range": false,
 	"custom_musicbrainz_duration_range_minvalue": 30,
 	"custom_musicbrainz_duration_range_maxvalue": 600,

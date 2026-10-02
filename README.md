@@ -1,7 +1,7 @@
 
 # WerZatSonGUI
 ![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-blue)
-![Version: 2.1.3](https://img.shields.io/badge/Version-2.1.3-orange)
+![Version: 2.2.0](https://img.shields.io/badge/Version-2.2.0-orange)
 
 ![WerZatSonGUI running a scan in dark mode](assets/images/gui_screenshot_1.png)
 ![WerZatSonGUI running a scan in light mode](assets/images/gui_screenshot_2.png)
@@ -380,6 +380,7 @@ Whether Long Mode runs at all this session is now decided by the **Scan Mode** s
 
 Picking specific PKLZ subfolders is now done through the **Select PKLZ Folders...** button on the **General tab**, not on this tab; the **[?]** popup next to it explains the trade-offs of selecting more than one subfolder.
 
+- **Override maximum thread number:** When checked, WerZatSong will not cap Audfprint at 16 threads. This option only appears if your machine has more than 16 logical processors. Only enable it if you know what you are doing: using more threads than your CPU can handle may cause memory errors or slow down other programs. The value in the thread count field will be used exactly as written, with no upper limit.
 - **Set the number of CPU threads to use:** sets how many CPU threads Audfprint mode uses. WerZatSong itself caps this at **16** regardless of what you enter, to help avoid running out of memory; leaving this unchecked lets it use all available threads on your machine automatically.
 - **Set search depth to:** controls how aggressively Audfprint searches for a match, from `1` to `8`. Higher values perform a more thorough "deep search" for low-quality clips, but may significantly increase processing time. Defaults to `4`.
 
@@ -482,8 +483,10 @@ The very first time you launch this version, any existing `PROCESSED.txt` is aut
 
 Whenever a scan finds a likely match, two things happen:
 
-1. A notification (and, for most modes, a small results `.txt` file with the raw match data) is posted to your **Discord Webhook**.
+1. A notification is posted to your **Discord Webhook**. The match entries are shown directly in the message body, inside a fenced code block, so you can read them at a glance without opening an attachment. If the report is too long for Discord's 2000-character message limit, the message is truncated with a note saying how many lines were cut, and the full report is attached as a `.txt` file alongside it.
 2. At the end of processing each batch/file, WerZatSonGUI copies every results file generated during it into a new, timestamped subfolder of your **Log Directory** (see [*Default Directories*](#default-directories) above and [*Log Format*](#log-format) below), and prints exactly where in the console (`[SUCCESS]: Logs for '...' saved in '...'`) so you never have to go hunting for it manually.
+
+A query that returns no matches above the confidence threshold (or no candidates at all) also posts a short `[<mode>]: <file> - no match found` notification to the same webhook, so an empty result is as visible as a match. AudioTag and Shazam API errors are logged to the console but do **not** generate a "no match" webhook post, since a failed lookup is not the same as a successful lookup that found nothing.
 
 If a batch/file produces no matches at all in any enabled mode, no log subfolder is created for it, with one exception: whenever **AudioTag** mode runs, its always-on `_audiotag_activity.jsonl`/`_audiotag_debug.jsonl` logs (see [*Log Format*](#log-format) below) are still written to that run's Log Directory subfolder even with zero matches, since their whole purpose is to make every AudioTag call traceable, not just successful ones. Every other mode still only shows up under your Log Directory for genuine matches.
 
@@ -492,11 +495,12 @@ If a batch/file produces no matches at all in any enabled mode, no log subfolder
 The exact format depends on the search mode:
 
 - **MusicBrainz, Audiotag and Shazam** logs are simple: one result per line (MusicBrainz), or the raw match data as-is (Audiotag/Shazam). Nothing fancier is needed since each of these modes returns at most a small number of already-scored candidates. **AudioTag** additionally always writes `_audiotag_activity.jsonl` (one line per track processed, match or not, with its outcome) and `_audiotag_debug.jsonl` (the raw request/response for every individual AudioTag API call) into the same run's results folder, regardless of whether any match was found &mdash; unlike the other logs on this page, these two are written even for a run with zero matches, so a failed or skipped AudioTag search is always traceable. API keys are never written to these logs in full, only their last 4 characters.
-- **Audfprint** logs are richer, since a single search can return many candidates that need to be judged against each other. Each one starts with a short **LEGEND** block explaining the format, followed by every candidate match, listed from most to least likely, formatted as two lines each:
-	```
+- **Audfprint** logs are richer, since a single search can return many candidates that need to be judged against each other. Each one starts with a short **LEGEND** block explaining the format, followed by every candidate match, listed from most to least likely, formatted as two lines each. The example below shows the English rendering:
+ 	```
     [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s
     <matched file name> (<matched file path>)
     ```
+     Both the LEGEND text and the field names inside this template are translatable, so a scan run with WerZatSonGUI set to Italian, French or Portuguese shows the same shape with that language's words (for example, Italian renders as `[ETICHETTA] <allineati> allineati / <grezzi> grezzi (<cons>%) | ...`). What never changes is the number of fields, their order, or what each one means:
     - **aligned:** the number of time-consistent matching hashes between your file and the candidate. This is the main piece of evidence you should take into account: Audfprint's own documentation notes that more than 5-6 aligned hashes usually means a genuine match.
     - **raw:** all hashes the two files have in common, before filtering for ones that line up in time.
     - **cons% (consistency):** `aligned / raw` as a percentage. Random, unrelated files stay under roughly 1%, so even a modest percentage here is meaningful.
@@ -505,7 +509,7 @@ The exact format depends on the search mode:
     - **offset:** where your file's audio lines up against the candidate, in seconds (negative means your file appears to start earlier).
     - **LABEL:** a plain-language summary of how confident the match is: **VERY STRONG**, **STRONG** and **PROBABLE** are strong enough that a Discord webhook message is also sent for them; **BORDERLINE** means it's below that bar but still worth a manual look; **NO MATCH** means it didn't clear any threshold.
 
-The same legend and formatting is used both in the `.txt` log file and in the results file attached to the Discord webhook post, so they always match.
+The same legend and entry formatting is used in three places that all match each other: the .txt log file on disk, the code block inside the Discord webhook message, and the .txt file attached to that webhook message if it had to be truncated. Both the legend and the entry template are translatable, so all three show the current language's field names. The English examples above are what you see when WerZatSonGUI is set to English: the other languages follow the same structure, but with their own words.
 
 ## Adding a Language / Translations
 
@@ -513,6 +517,6 @@ WerZatSonGUI currently ships with **English**, **Italian**, **French** and **Por
 
 ## Credits
 
-- **WerZatSonGUI v2.1.3** by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65, Numerophobe and bytesofmyself. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65.
+- **WerZatSonGUI v2.2.0** by some random account, with contributions from EierkuchenHD, VoidGod, Mystic65, Numerophobe and bytesofmyself. Testers: EierkuchenHD, VoidGod, Shardanik, AuDriūnas, Cluttic, Simon Le Plot, drpostal, Mystic65.
 - **WerZatSong batch script** by some random account, with speed/tempo-based file generation logic by Mystic65.
 - **WerZatSong** by Nel, with contributions from Numerophobe, AzureBlast, and Mystic65.

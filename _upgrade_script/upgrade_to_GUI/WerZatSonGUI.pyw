@@ -191,7 +191,7 @@ DEFAULT_HASH_TABLES_DIR = os.path.join(CUR_FOLDER, "hash_counts")
 DEFAULT_CONSOLE_LOGS_DIR = os.path.join(CUR_FOLDER, "console_logs")
 CRASH_LOG_FILE = os.path.join(CUR_FOLDER, "crash_logs.txt")
 FORCE_STOP_LOG_MARKER_FILE = os.path.join(CUR_FOLDER, "force_stop_log_pending.json")
-APP_VERSION = "2.1.3"
+APP_VERSION = "2.2.0"
 
 PUBLIC_PKLZ_DATABASE_URL = "https://wzs.cosine.club/"
 PUBLIC_PKLZ_DATABASE_URL_ALT = "https://werzatdb.com/fingerprints"
@@ -368,8 +368,10 @@ def compute_werzatsong_cmd(config, pklz_folder_override=None):
                 cmd.extend(["--folder", pklz_folder_override])
         elif config.get("only_use_fingerprint_subfolder"):
             cmd.extend(["--folder", config.get("fingerprint_subfolder_dirname") or "default_subdir"])
-        if config.get("use_custom_thread_count"):
+        if config.get("use_custom_thread_count") or config.get("override_max_thread_count"):
             cmd.extend(["--threads", str(config.get("custom_thread_count_value") or "4")])
+        if config.get("override_max_thread_count"):
+            cmd.append("--override-max-threads")
         if config.get("use_custom_search_depth"):
             cmd.extend(["--shifts", str(config.get("custom_search_depth_value") or str(SEARCH_DEPTH_DEFAULT))])
     return cmd
@@ -406,6 +408,7 @@ def default_config():
         "custom_webhook_image_link": DEFAULT_WEBHOOK_AVATAR,
         "use_custom_thread_count": False,
         "custom_thread_count_value": "4",
+        "override_max_thread_count": False,
         "use_custom_search_depth": False,
         "custom_search_depth_value": str(SEARCH_DEPTH_DEFAULT),
         "custom_musicbrainz_duration_range": False,
@@ -458,9 +461,12 @@ def validate_config(raw):
     if isinstance(raw, dict):
         bool_keys = ["mode_musicbrainz", "mode_audiotag", "mode_shazam", "mode_audfprint",
                      "only_use_fingerprint_subfolder",
-                     "use_custom_webhook_name", "use_custom_webhook_image", "use_custom_thread_count",
-                     "use_custom_search_depth", "custom_musicbrainz_duration_range", "custom_musicbrainz_extension",
-                     "create_pklz_hash_tables_on_load_val", "audiotag_use_multiple_keys"]
+                     "use_custom_webhook_name", "use_custom_webhook_image",
+                     "use_custom_thread_count", "use_custom_search_depth",
+                     "custom_musicbrainz_duration_range", "custom_musicbrainz_extension",
+                     "create_pklz_hash_tables_on_load_val",
+                     "audiotag_use_multiple_keys",
+                     "override_max_thread_count"]
         for key in bool_keys:
             if isinstance(raw.get(key), bool):
                 result[key] = raw[key]
@@ -2419,27 +2425,40 @@ class WerZatSongGUI(tk.Tk):
         self._notebook_tabs.append((notebook, frame, "audfprint_tab"))
         frame.columnconfigure(2, weight=1)
 
-        # Picking specific PKLZ subfolders now happens through the "Select PKLZ Folders..."
-        # button on the General tab (see _open_pklz_selection_menu), not here: that dialog can
-        # select several subfolders at once (this tab's old checkbox only ever supported one),
-        # and its own "?" help button explains the multi-target regeneration trade-off.
-        self._add_help_button(frame, 0, "thread_count")
+        self._add_help_button(frame, 0, "override_max_threads")
+        cpu_count = os.cpu_count() or 0
+        if cpu_count > 16:
+            self.var_override_max_threads = tk.BooleanVar(
+                value=self.config_data.get("override_max_thread_count", False))
+            self._add_text_widget(
+                ttk.Checkbutton(frame, variable=self.var_override_max_threads,
+                                command=self._on_toggle_override_max_threads),
+                "override_max_threads_check"
+            ).grid(row=0, column=1, sticky="w", pady=2)
+        else:
+            self.var_override_max_threads = tk.BooleanVar(value=False)
+            self._add_text_widget(
+                ttk.Label(frame, text="", foreground="#888888"),
+                "override_max_threads_unavailable"
+            ).grid(row=0, column=1, sticky="w", pady=2, padx=(3, 0))
+        
+        self._add_help_button(frame, 1, "thread_count")
         self.var_use_threads = tk.BooleanVar(value=self.config_data["use_custom_thread_count"])
         self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_use_threads,
                                                command=self._flush_immediately),
-                              "thread_count_check").grid(row=0, column=1, sticky="w", pady=2)
+                              "thread_count_check").grid(row=1, column=1, sticky="w", pady=2)
         self.var_thread_count = tk.StringVar(value=self.config_data["custom_thread_count_value"])
         self.var_thread_count.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_thread_count, width=6).grid(row=0, column=2, sticky="w", padx=4)
+        ttk.Entry(frame, textvariable=self.var_thread_count, width=6).grid(row=1, column=2, sticky="w", padx=4)
 
-        self._add_help_button(frame, 1, "search_depth")
+        self._add_help_button(frame, 2, "search_depth")
         self.var_use_search_depth = tk.BooleanVar(value=self.config_data["use_custom_search_depth"])
         self._add_text_widget(ttk.Checkbutton(frame, variable=self.var_use_search_depth,
                                                command=self._flush_immediately),
-                              "search_depth_check").grid(row=1, column=1, sticky="w", pady=2)
+                              "search_depth_check").grid(row=2, column=1, sticky="w", pady=2)
         self.var_search_depth = tk.StringVar(value=str(self.config_data["custom_search_depth_value"]))
         self.var_search_depth.trace_add("write", self._make_simple_trace())
-        ttk.Entry(frame, textvariable=self.var_search_depth, width=6).grid(row=1, column=2, sticky="w", padx=4)
+        ttk.Entry(frame, textvariable=self.var_search_depth, width=6).grid(row=2, column=2, sticky="w", padx=4)
 
     def _build_musicbrainz_tab(self, notebook):
         frame = ttk.Frame(notebook, padding=8)
@@ -2657,6 +2676,15 @@ class WerZatSongGUI(tk.Tk):
     def _on_toggle_audiotag_multi_key(self):
         if self.var_audiotag_multi_key.get():
             messagebox.showwarning(self._tr("multi_key_warning_title"), self._tr("multi_key_warning_msg"))
+        self._flush_immediately()
+
+    def _on_toggle_override_max_threads(self):
+        if self.var_override_max_threads.get():
+            if not self.var_use_threads.get():
+                self.var_use_threads.set(True)
+            messagebox.showwarning(
+                self._tr("override_max_threads_warning_title"),
+                self._tr("override_max_threads_warning_msg"))
         self._flush_immediately()
 
     def _refresh_audiotag_keys_listbox(self):
@@ -3305,6 +3333,7 @@ class WerZatSongGUI(tk.Tk):
         c["use_custom_webhook_image"] = bool(self.var_use_custom_image.get())
         c["custom_webhook_image_link"] = self.var_custom_image.get()
         c["use_custom_thread_count"] = bool(self.var_use_threads.get())
+        c["override_max_thread_count"] = bool(self.var_override_max_threads.get())
         thread_val = self.var_thread_count.get().strip()
         c["custom_thread_count_value"] = thread_val if thread_val.isdigit() else c.get("custom_thread_count_value", "4")
         c["use_custom_search_depth"] = bool(self.var_use_search_depth.get())

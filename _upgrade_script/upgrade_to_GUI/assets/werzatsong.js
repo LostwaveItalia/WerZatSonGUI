@@ -37,7 +37,7 @@ const DEFAULT_MERGE_SHARD_FILES = 64       // source pklz files merged per outpu
 const MAX_FILES_PER_SEARCH = 30            // amount
 const MAX_PREP_CONCURRENCY = 8             // upper bound for parallel ffmpeg/precompute workers
 const MUSICBRAINZ_MIN_SCORE = 60           // percentage
-const PROGRAM_VERSION = 'v2.1.3'
+const PROGRAM_VERSION = 'v2.2.0'
 const RESULTS_FOLDER = join(consts.LOGS_FOLDER, generateUnique())
 const SHAZAM_SLEEP = 1.5                   // seconds
 const WEBHOOK_SLEEP = 2                    // seconds between Discord posts
@@ -69,6 +69,7 @@ const { argv } = yargs(hideBin(process.argv))
 .option('folder', { type: 'string', description: 'Specify the subfolder containing PKLZ files to be used in Audfprint mode' })
 .option('threads', { type: 'number', description: 'Set the number of threads to use for Audfprint processing' })
 .option('shifts', { type: 'number', description: `Query-side audfprint --shifts (1-8). Higher is more robust but linearly slower; default ${DEFAULT_QUERY_SHIFTS}` })
+.option('override-max-threads', { type: 'boolean', description: 'Allow more than the default 16 Audfprint threads' })
 // Database maintenance
 .option('merge', { type: 'string', description: 'Merge the PKLZ files in "database/<folder>" into a few large shards (major speedup), then exit. Pass "" for the database root' })
 .option('shard-files', { type: 'number', description: `In --merge mode, how many source PKLZ files go into each merged shard (default ${DEFAULT_MERGE_SHARD_FILES})` })
@@ -447,12 +448,14 @@ function createResultsLog(basename, mode, content){
     return resultsFile
 }
 
-function fetchFingerprints(targetFolder){
+function fetchFingerprints(targetFolder, { skipMerged = false } = {}){
     let pklzFiles = []
     const fetchFilesRecursively = dir => {
         const files = readdirSync(dir, { withFileTypes: true })
         for(const file of files){
             const fullPath = join(dir, file.name)
+            if(file.isDirectory() && skipMerged && file.name.endsWith('__merged'))
+                continue
             if(file.isDirectory())
                 fetchFilesRecursively(fullPath)
             else if(file.isFile() && file.name.endsWith('.pklz'))
@@ -467,7 +470,8 @@ function setupAudfprint(folder){
     const baseFolder = join(consts.DATABASE_FOLDER, folder ? folder.trim() : '')
     if(!existsSync(baseFolder))
         exit(t('folder_not_found_in_database', { folder }))
-    const pklzFiles = fetchFingerprints(baseFolder)
+    const explicitMerged = Boolean(folder) && folder.trim().replace(/[\\/]+$/, '').endsWith('__merged')
+    const pklzFiles = fetchFingerprints(baseFolder, { skipMerged: !explicitMerged })
     if(pklzFiles.length === 0)
         exit(t('no_pklz_files_found', { folder: baseFolder }))
     writeFileSync(consts.PKLZS_FILE, pklzFiles.join('\n'))
@@ -519,46 +523,36 @@ function audfprint(env, threads){
  * ------------------------------------------------------------------------ */
 
 function classifyMatch(aligned, consistencyPct){
-    if(aligned >= AUDFPRINT_VERY_STRONG_ALIGNED)
-        return 'very strong'
-    if(aligned >= AUDFPRINT_STRONG_ALIGNED && consistencyPct >= AUDFPRINT_STRONG_CONSISTENCY)
-        return 'strong'
-    if(aligned >= AUDFPRINT_PROBABLE_ALIGNED && consistencyPct >= AUDFPRINT_PROBABLE_CONSISTENCY)
-        return 'probable'
-    if(aligned >= AUDFPRINT_REVIEW_ALIGNED && consistencyPct >= AUDFPRINT_STRONG_CONSISTENCY)
-        return 'borderline' // def worth a manual look, but not in webhook message
+    if(aligned >= AUDFPRINT_VERY_STRONG_ALIGNED) return 'very strong'
+    if(aligned >= AUDFPRINT_STRONG_ALIGNED && consistencyPct >= AUDFPRINT_STRONG_CONSISTENCY) return 'strong'
+    if(aligned >= AUDFPRINT_PROBABLE_ALIGNED && consistencyPct >= AUDFPRINT_PROBABLE_CONSISTENCY) return 'probable'
+    if(aligned >= AUDFPRINT_REVIEW_ALIGNED && consistencyPct >= AUDFPRINT_STRONG_CONSISTENCY) return 'borderline'
     return null
+}
+
+function labelOf(confidence){
+    if(!confidence) return t('label_no_match')
+    return t(`label_${confidence.replace(/ /g, '_')}`)
 }
 
 function extractPklzName(resultKey){
     const matches = String(resultKey).match(/[^:\\\/|]+\.pklz/gi)
-    return matches ? matches[matches.length - 1] : 'unknown.pklz'
+    return matches ? matches[matches.length - 1] : t('unknown_pklz')
 }
 
-const LOG_LEGEND = [
-    'LEGEND',
-    '  Each entry is two lines:',
-    '    [LABEL] <aligned> aligned / <raw> raw (<cons>%) | x<hits> | #<rank> | <source pklz> | offset <t>s',
-    '    <matched file name> (<matched file path>)',
-    '',
-    '  aligned : time-consistent matching hashes - the primary evidence.',
-    '            audfprint\'s docs: more than 5-6 aligned hashes usually means a true match.',
-    '  raw     : all hashes the query and reference have in common, before time filtering.',
-    '  cons%   : aligned / raw. Random chance stays under ~1%, so even a few percent is meaningful.',
-    '  hits    : how many alignment hits the worker reported for this pair.',
-    '  rank    : candidate position in audfprint\'s raw pre-ranking (diagnostic, not confidence).',
-    '  offset  : query start relative to the reference, in seconds (negative = query starts earlier).',
-    '  LABEL   : VERY STRONG / STRONG / PROBABLE are webhook-worthy; BORDERLINE = review manually;',
-    '            NO MATCH = below every threshold, listed for completeness.',
-    '',
-    ''
-].join('\n')
+const LOG_LEGEND = t('log_legend')
 
 function formatMatchEntry(match){
-    const label = (match.confidence || 'no match').toUpperCase()
-    const header = `[${label}] ${match.aligned_hashes} aligned / ${match.raw_common_hashes} raw `
-        + `(${match.consistency_pct.toFixed(2)}%) | x${match.hits} | #${match.rank} | `
-        + `${match.source_pklz} | offset ${match.offset_s}s`
+    const header = t('format_match_entry', {
+        label: labelOf(match.confidence).toUpperCase(),
+        aligned: match.aligned_hashes,
+        raw: match.raw_common_hashes,
+        cons: match.consistency_pct.toFixed(2),
+        hits: match.hits,
+        rank: match.rank,
+        pklz: match.source_pklz,
+        offset: match.offset_s
+    })
     return `${header}\n${match.matched_basename} (${match.matched_file})\n`
 }
 
@@ -566,7 +560,7 @@ function buildMatchReport(matches){
     return matches.map(formatMatchEntry).join('\n')
 }
 
-async function createAudfprintLogs(env){
+async function createAudfprintLogs(env, queryFiles = []){
     if(!existsSync(consts.RESULTS_FILE)){
         warning(t('no_audfprint_results_file', { audfprint: Mode.AUDFPRINT }))
         return []
@@ -616,19 +610,22 @@ async function createAudfprintLogs(env){
         if(webhookMatches.length > 0){
             const tempFile = join(consts.TEMP_FOLDER, `${inputBasename}.webhook.txt`)
             writeFileSync(tempFile, `${LOG_LEGEND}${buildMatchReport(webhookMatches)}`, 'utf-8')
-            // Not necessarily really an .mp3: the query here could be a precomputed .afpt
-            // submitted directly with no real audio companion in this run at all, so the
-            // basename alone (no fabricated extension) is the only thing known for sure.
-            await sleep(WEBHOOK_SLEEP)
-            try {
-                await postWebhook(env.WEBHOOK_URL, `[${Mode.AUDFPRINT}]: ${inputBasename}`, tempFile)
-                success(t('match_found_webhook_sent', { file: inputBasename, mode: Mode.AUDFPRINT }))
-            }
-            catch(error){
-                warning(t('match_found_webhook_failed', { file: inputBasename, error: error.message }))
-            }
+            await sendMatchWebhook(env, Mode.AUDFPRINT, inputBasename,
+                buildMatchReport(webhookMatches), tempFile)
             unlinkSync(tempFile)
         }
+        else {
+            empty(t('no_match_found', { file: inputBasename, mode: Mode.AUDFPRINT }))
+            await sendNoMatchWebhook(env, Mode.AUDFPRINT, inputBasename)
+        }
+    }
+
+    for(const afpt of queryFiles){
+        const inputBasename = trimExtension(basename(afpt))
+        if(matchesByInput[inputBasename])
+            continue
+        empty(t('no_match_found', { file: inputBasename, mode: Mode.AUDFPRINT }))
+        await sendNoMatchWebhook(env, Mode.AUDFPRINT, inputBasename)
     }
     return summary
 }
@@ -644,12 +641,81 @@ function printAudfprintSummary(summary){
         }
         const description = `${best.aligned_hashes} aligned (${best.consistency_pct.toFixed(2)}% consistent) -> ${best.matched_basename} [${best.source_pklz}]`
         if(best.confidence && best.confidence !== 'borderline')
-            success(t('confident_match', { query, confidence: best.confidence.toUpperCase(), description }))
+            success(t('confident_match', { query, confidence: labelOf(best.confidence).toUpperCase(), description }))
         else if(best.confidence === 'borderline')
             warning(t('borderline_match', { query, description }))
         else
             empty(t('no_confident_match', { query, description }))
     }
+}
+
+/* ---------------------------------------------------------------------------
+ * Discord webhook rendering
+ * ------------------------------------------------------------------------ */
+
+const DISCORD_CONTENT_LIMIT = 2000
+const FENCE = '```'
+
+function fenceSafe(text){
+    return String(text).replace(/```/g, '`​``')
+}
+
+function sanitizeInlineCode(text){
+    return String(text ?? '').replace(/`/g, '')
+}
+
+function formatWebhookHeader(mode, fileBasename){
+    return t('webhook_header', { mode, file: sanitizeInlineCode(fileBasename) })
+}
+
+function codeBlockMessage(header, body){
+    const overhead = `${header}\n${FENCE}\n\n${FENCE}`.length
+    const room = DISCORD_CONTENT_LIMIT - overhead
+    const lines = fenceSafe(body).trimEnd().split('\n')
+    let text = lines.join('\n')
+    let truncated = false
+    if(text.length > room){
+        truncated = true
+        const kept = []
+        let used = 0
+        for(const line of lines){
+            const notice = `\n${t('webhook_truncated_lines', { count: lines.length - kept.length })}`
+            if(used + line.length + 1 + notice.length > room)
+                break
+            kept.push(line)
+            used += line.length + 1
+        }
+        if(kept.length === 0){
+            const notice = `\n${t('webhook_truncated_one_line')}`
+            kept.push(lines[0].slice(0, Math.max(0, room - notice.length)))
+            text = `${kept[0]}${notice}`
+        }
+        else
+            text = `${kept.join('\n')}\n${t('webhook_truncated_lines', { count: lines.length - kept.length })}`
+    }
+    return { content: `${header}\n${FENCE}\n${text}\n${FENCE}`, truncated }
+}
+
+async function sendMatchWebhook(env, mode, fileBasename, report, fullReportFile = null){
+    const { content, truncated } = codeBlockMessage(
+        formatWebhookHeader(mode, fileBasename), report)
+    await sleep(WEBHOOK_SLEEP)
+    const sent = await postWebhook(env.WEBHOOK_URL, content,
+        truncated ? fullReportFile : null)
+    if(sent)
+        success(t('match_found_webhook_sent', { file: fileBasename, mode }))
+    else
+        warning(t('match_found_webhook_failed', { file: fileBasename, error: t('webhook_post_failed') }))
+    return sent
+}
+
+async function sendNoMatchWebhook(env, mode, fileBasename){
+    await sleep(WEBHOOK_SLEEP)
+    const sent = await postWebhook(env.WEBHOOK_URL,
+        formatWebhookHeader(mode, fileBasename) + t('webhook_no_match_suffix'))
+    if(!sent)
+        warning(t('no_match_webhook_failed', { file: fileBasename, mode }))
+    return sent
 }
 
 /* ---------------------------------------------------------------------------
@@ -758,16 +824,13 @@ async function musicbrainz(env, file, extension, duration){
         }
         if(results.length > 0){
             const resultsFile = createResultsLog(trimExtension(fileBasename), Mode.MUSICBRAINZ, `${results.join('\n')}\n`)
-            try {
-                await postWebhook(env.WEBHOOK_URL, `[${Mode.MUSICBRAINZ}]: ${fileBasename}`, resultsFile)
-                success(t('match_found_webhook_sent', { file: fileBasename, mode: Mode.MUSICBRAINZ }))
-            }
-            catch(error){
-                warning(t('match_found_webhook_failed', { file: fileBasename, error: error.message }))
-            }
+            await sendMatchWebhook(env, Mode.MUSICBRAINZ, fileBasename,
+                results.join('\n'), resultsFile)
         }
-        else
+        else {
             empty(t('no_match_found', { file: fileBasename, mode: Mode.MUSICBRAINZ }))
+            await sendNoMatchWebhook(env, Mode.MUSICBRAINZ, fileBasename)
+        }
     }
     catch(error){
         warning(t('search_failed', { mode: Mode.MUSICBRAINZ, file: fileBasename, error: error.message }))
@@ -855,13 +918,8 @@ async function audiotag(env, file, keyManager){
 
         if(response.match){
             const resultsFile = createResultsLog(trimExtension(fileBasename), Mode.AUDIOTAG, `${JSON.stringify(response.match)}\n`)
-            try {
-                await postWebhook(env.WEBHOOK_URL, `[${Mode.AUDIOTAG}]: ${fileBasename}`, resultsFile)
-                success(t('match_found_webhook_sent', { file: fileBasename, mode: Mode.AUDIOTAG }))
-            }
-            catch(error){
-                warning(t('match_found_webhook_failed', { file: fileBasename, error: error.message }))
-            }
+            await sendMatchWebhook(env, Mode.AUDIOTAG, fileBasename,
+                JSON.stringify(response.match, null, 2), resultsFile)
         }
         else if(response.errorCode === 'CREDIT_EXHAUSTED' || response.errorCode === 'KEY_INVALID'){
             const status = response.errorCode === 'CREDIT_EXHAUSTED' ? KeyStatus.EXHAUSTED : KeyStatus.INVALID
@@ -879,8 +937,10 @@ async function audiotag(env, file, keyManager){
             const messageKey = AUDIOTAG_ERROR_MESSAGE_KEYS[response.errorCode] || 'audiotag_error_unknown'
             warning(t(messageKey, { file: fileBasename, error: response.rawError || response.error?.message || '' }))
         }
-        else
+        else {
             empty(t('no_match_found', { file: fileBasename, mode: Mode.AUDIOTAG }))
+            await sendNoMatchWebhook(env, Mode.AUDIOTAG, fileBasename)
+        }
     }
     catch(error){
         warning(t('search_failed', { mode: Mode.AUDIOTAG, file: fileBasename, error: error.message }))
@@ -900,16 +960,12 @@ async function shazam(env, file){
         const result = stdout.trim()
         if(result !== ''){
             const resultsFile = createResultsLog(trimExtension(fileBasename), Mode.SHAZAM, `${result}\n`)
-            try {
-                await postWebhook(env.WEBHOOK_URL, `[${Mode.SHAZAM}]: ${fileBasename}`, resultsFile)
-                success(t('match_found_webhook_sent', { file: fileBasename, mode: Mode.SHAZAM }))
-            }
-            catch(error){
-                warning(t('match_found_webhook_failed', { file: fileBasename, error: error.message }))
-            }
+            await sendMatchWebhook(env, Mode.SHAZAM, fileBasename, result, resultsFile)
         }
-        else
+        else {
             empty(t('no_match_found', { file: fileBasename, mode: Mode.SHAZAM }))
+            await sendNoMatchWebhook(env, Mode.SHAZAM, fileBasename)
+        }
     }
     catch(error){
         warning(t('search_failed', { mode: Mode.SHAZAM, file: fileBasename, error: error.message }))
@@ -979,7 +1035,12 @@ async function init(){
 
     let pklzCount = 0
     if(modes.includes(Mode.AUDFPRINT)){
-        threads = Math.min(consts.MAX_CORES_ALLOWED, (!isNaN(threads) && threads > 0) ? threads : availableParallelism())
+        const requestedThreads = (!isNaN(threads) && threads > 0) ? threads : availableParallelism()
+        threads = argv['override-max-threads']
+            ? requestedThreads
+            : Math.min(consts.MAX_CORES_ALLOWED, requestedThreads)
+        if(argv['override-max-threads'] && threads > consts.MAX_CORES_ALLOWED)
+            warning(t('audfprint_thread_override_active', { count: threads, limit: consts.MAX_CORES_ALLOWED }))
         pklzCount = setupAudfprint(folder)
     }
 
@@ -1030,7 +1091,7 @@ async function init(){
             duration: formatSeconds(Date.now() - matchStartedAt),
             rate: (pklzCount / Math.max(1, (Date.now() - matchStartedAt) / 1000)).toFixed(2)
         }))
-        const summary = await createAudfprintLogs(env)
+        const summary = await createAudfprintLogs(env, afpts)
         printAudfprintSummary(summary)
     }
 
