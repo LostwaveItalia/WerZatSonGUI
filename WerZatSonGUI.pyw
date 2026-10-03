@@ -400,7 +400,7 @@ def default_config():
         "scan_mode": "quick",
         "negative_tempo_array": list(NEGATIVE_TEMPO_DEFAULT),
         "positive_tempo_array": list(POSITIVE_TEMPO_DEFAULT),
-        "cache_long_variations": True,
+        "cache_long_variations": False,
         "only_use_fingerprint_subfolder": False,
         "fingerprint_subfolder_dirname": "default_subdir",
         "use_custom_webhook_name": False,
@@ -2953,7 +2953,7 @@ class WerZatSongGUI(tk.Tk):
         ttk.Entry(frame, textvariable=self.var_positive_tempos).grid(row=1, column=2, sticky="ew", pady=2)
 
         self._add_help_button(frame, 2, "cache_long_variations")
-        self.var_cache_long_variations = tk.BooleanVar(value=self.config_data.get("cache_long_variations", True))
+        self.var_cache_long_variations = tk.BooleanVar(value=self.config_data.get("cache_long_variations", False))
         self.var_cache_long_variations.trace_add("write", self._make_simple_trace())
         self._add_text_widget(
             ttk.Checkbutton(frame, variable=self.var_cache_long_variations, command=self._flush_immediately),
@@ -6208,7 +6208,7 @@ class WerZatSongGUI(tk.Tk):
                 self._log(self._tr("log_gen_error", file=filename))
                 self._log(str(e))
 
-        use_cache = self.config_data.get("cache_long_variations", True)
+        use_cache = self.config_data.get("cache_long_variations", False)
         cache_base = os.path.join(ASSETS_FOLDER, "cache", "variations")
         song_cache_dir = os.path.join(cache_base, base_name)
 
