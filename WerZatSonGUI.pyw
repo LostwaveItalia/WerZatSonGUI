@@ -6263,7 +6263,7 @@ class WerZatSongGUI(tk.Tk):
 
         if use_cache and not errors and len(valid_generated) == len(expected_filenames):
             try:
-                os.makedirs(song_cache_dir, exist_ok=True)
+                force_clean_directory(song_cache_dir, recreate=True)
                 for path in valid_generated:
                     dest = os.path.join(song_cache_dir, os.path.basename(path))
                     shutil.copy2(path, dest)
