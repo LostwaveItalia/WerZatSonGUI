@@ -400,6 +400,7 @@ def default_config():
         "scan_mode": "quick",
         "negative_tempo_array": list(NEGATIVE_TEMPO_DEFAULT),
         "positive_tempo_array": list(POSITIVE_TEMPO_DEFAULT),
+        "cache_long_variations": False,
         "only_use_fingerprint_subfolder": False,
         "fingerprint_subfolder_dirname": "default_subdir",
         "use_custom_webhook_name": False,
@@ -466,7 +467,8 @@ def validate_config(raw):
                      "custom_musicbrainz_duration_range", "custom_musicbrainz_extension",
                      "create_pklz_hash_tables_on_load_val",
                      "audiotag_use_multiple_keys",
-                     "override_max_thread_count"]
+                     "override_max_thread_count",
+                     "cache_long_variations"]
         for key in bool_keys:
             if isinstance(raw.get(key), bool):
                 result[key] = raw[key]
@@ -2950,6 +2952,59 @@ class WerZatSongGUI(tk.Tk):
         self.var_positive_tempos.trace_add("write", self._make_simple_trace())
         ttk.Entry(frame, textvariable=self.var_positive_tempos).grid(row=1, column=2, sticky="ew", pady=2)
 
+        self._add_help_button(frame, 2, "cache_long_variations")
+        self.var_cache_long_variations = tk.BooleanVar(value=self.config_data.get("cache_long_variations", False))
+        self.var_cache_long_variations.trace_add("write", self._make_simple_trace())
+        self._add_text_widget(
+            ttk.Checkbutton(frame, variable=self.var_cache_long_variations, command=self._flush_immediately),
+            "cache_long_variations_label"
+        ).grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 2))
+
+        cache_btn_frame = ttk.Frame(frame)
+        cache_btn_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=4)
+        self._add_text_widget(
+            ttk.Button(cache_btn_frame, command=self._clear_variation_cache),
+            "clear_variation_cache_btn"
+        ).pack(side="left", padx=(0, 8))
+        self.lbl_cache_status = ttk.Label(cache_btn_frame, text="")
+        self.lbl_cache_status.pack(side="left")
+        self._refresh_cache_status_label()
+
+    def _clear_variation_cache(self):
+        cache_base = os.path.join(ASSETS_FOLDER, "cache", "variations")
+        if os.path.exists(cache_base):
+            try:
+                force_clean_directory(cache_base, recreate=False)
+                self._log(self._tr("log_cache_cleared"))
+            except Exception as e:
+                self._log(f"[ERROR]: Failed to clear variation cache: {e}")
+        self._refresh_cache_status_label()
+
+    def _refresh_cache_status_label(self):
+        if not hasattr(self, "lbl_cache_status"):
+            return
+        cache_base = os.path.join(ASSETS_FOLDER, "cache", "variations")
+        if not os.path.isdir(cache_base):
+            self.lbl_cache_status.config(text=self._tr("cache_status_empty"))
+            return
+        total_files = 0
+        total_size = 0
+        try:
+            for root, _dirs, files in os.walk(cache_base):
+                for f in files:
+                    total_files += 1
+                    try:
+                        total_size += os.path.getsize(os.path.join(root, f))
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+        if total_files == 0:
+            self.lbl_cache_status.config(text=self._tr("cache_status_empty"))
+        else:
+            self.lbl_cache_status.config(
+                text=self._tr("cache_status_summary", count=total_files, size=format_size(total_size)))
+
     def _build_action_bar(self, parent):
         bar = ttk.Frame(parent)
         bar.pack(fill="x")
@@ -3328,6 +3383,7 @@ class WerZatSongGUI(tk.Tk):
                                                       c.get("negative_tempo_array", NEGATIVE_TEMPO_DEFAULT))
         c["positive_tempo_array"] = parse_tempo_list(self.var_positive_tempos.get(),
                                                       c.get("positive_tempo_array", POSITIVE_TEMPO_DEFAULT))
+        c["cache_long_variations"] = bool(self.var_cache_long_variations.get())
         c["use_custom_webhook_name"] = bool(self.var_use_custom_name.get())
         c["custom_webhook_name_value"] = self.var_custom_name.get()
         c["use_custom_webhook_image"] = bool(self.var_use_custom_image.get())
@@ -5460,6 +5516,7 @@ class WerZatSongGUI(tk.Tk):
         self._set_container_enabled(self._directories_frame, True)
         self._set_container_enabled(self._search_modes_frame, True)
         self._set_container_enabled(self._advanced_notebook, True)
+        self._refresh_cache_status_label()
         if self.pending_env:
             self._write_env_now()
         if error:
@@ -6151,6 +6208,36 @@ class WerZatSongGUI(tk.Tk):
                 self._log(self._tr("log_gen_error", file=filename))
                 self._log(str(e))
 
+        use_cache = self.config_data.get("cache_long_variations", False)
+        cache_base = os.path.join(ASSETS_FOLDER, "cache", "variations")
+        song_cache_dir = os.path.join(cache_base, base_name)
+
+        expected_filenames = []
+        for tempo in tempos:
+            pitch = 12 * math.log2(tempo)
+            expected_filenames.append(f"{base_name}_t{tempo:.4f}_p{pitch:.4f}.mp3")
+
+        cache_valid = False
+        if use_cache and os.path.isdir(song_cache_dir):
+            cached_paths = [os.path.join(song_cache_dir, fn) for fn in expected_filenames]
+            try:
+                input_mtime = os.path.getmtime(input_file_path)
+                if all(os.path.isfile(p) and os.path.getsize(p) > 0 and os.path.getmtime(p) >= input_mtime for p in cached_paths):
+                    cache_valid = True
+            except OSError:
+                cache_valid = False
+
+        if cache_valid:
+            self._log(self._tr("log_cache_hit_variations", count=len(cached_paths), file=filename))
+            for p in cached_paths:
+                dest = os.path.join(pool_dir, os.path.basename(p))
+                shutil.copy2(p, dest)
+                generated.append(dest)
+            self.after(0, self._refresh_cache_status_label)
+            return generated
+
+        self._log(self._tr("log_generating_variations", file=filename))
+
         tasks = [(input_file_path, tempo, pool_dir, base_name, sys_temp_dir) for tempo in tempos]
 
         results = [None] * len(tasks)
@@ -6171,7 +6258,19 @@ class WerZatSongGUI(tk.Tk):
                     errors.append(value)
                 self._log(self._tr("log_gen_progress", done=completed, total=total))
 
-        generated.extend(path for path in results if path)
+        valid_generated = [path for path in results if path]
+        generated.extend(valid_generated)
+
+        if use_cache and not errors and len(valid_generated) == len(expected_filenames):
+            try:
+                force_clean_directory(song_cache_dir, recreate=True)
+                for path in valid_generated:
+                    dest = os.path.join(song_cache_dir, os.path.basename(path))
+                    shutil.copy2(path, dest)
+            except Exception as e:
+                self._log(f"[WARNING]: Failed to write variations to cache: {e}")
+            self.after(0, self._refresh_cache_status_label)
+
         if errors:
             self._log(self._tr("log_gen_error", file=filename))
             for e in errors[:5]:
